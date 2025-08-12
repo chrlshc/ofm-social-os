@@ -2,6 +2,12 @@ import random
 from typing import Dict, List, Optional
 from datetime import datetime
 import json
+import logging
+
+from config_manager import config
+from compliance import compliance
+
+logger = logging.getLogger(__name__)
 
 class MessageGenerator:
     def __init__(self):
@@ -70,7 +76,8 @@ class MessageGenerator:
                         fan_profile: Dict,
                         phase: str,
                         context: Optional[Dict] = None,
-                        account_size: str = "small") -> str:
+                        account_size: str = "small",
+                        fan_id: str = None) -> Dict[str, any]:
         """
         Generates a personalized message based on fan profile and IRAS phase
         """
@@ -90,7 +97,19 @@ class MessageGenerator:
         if account_size == "large" and phase in ["attraction", "submission"]:
             base_message = self._add_urgency(base_message)
         
-        return base_message
+        # Apply compliance checking
+        validation_result = compliance.validate_message_generation(fan_id or "unknown", base_message)
+        
+        # Log compliance check
+        if fan_id:
+            compliance.log_compliance_check(fan_id, validation_result)
+        
+        return {
+            "message": base_message,
+            "compliance": validation_result,
+            "manual_send_required": config.is_manual_send_required(),
+            "formatted_for_manual_send": compliance.format_message_for_manual_send(base_message, validation_result) if config.is_manual_send_required() else None
+        }
     
     def _personalize_message(self, message: str, context: Dict) -> str:
         """

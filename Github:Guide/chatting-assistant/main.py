@@ -6,18 +6,26 @@ from typing import List, Dict, Optional
 import argparse
 from colorama import init, Fore, Style
 import os
+import logging
 
 from fan_analyzer import FanAnalyzer
 from message_generator import MessageGenerator
+from config_manager import config
+from database import db
+from compliance import compliance
 
 init(autoreset=True)
 
 class OnlyFansChatBot:
-    def __init__(self, account_size: str = "small"):
+    def __init__(self, account_size: str = None):
+        self.account_size = account_size or config.get_account_size()
         self.analyzer = FanAnalyzer()
         self.generator = MessageGenerator()
-        self.account_size = account_size
         self.conversations = {}
+        
+        # Compliance check
+        if not config.is_manual_send_required():
+            logging.warning("Manual send requirement is disabled - ensure compliance with platform policies")
     
     def process_fan_messages(self, fan_id: str, messages: List[str]) -> Dict:
         """
@@ -47,23 +55,31 @@ class OnlyFansChatBot:
             fan_profile=fan_profile,
             phase=phase,
             context=context,
-            account_size=self.account_size
+            account_size=self.account_size,
+            fan_id=fan_id
         )
         
+        # Save to database
+        db.save_fan_profile(fan_id, fan_profile)
+        
+        # Store in memory for session
         self.conversations[fan_id] = {
             "profile": fan_profile,
             "phase": phase,
             "interests": interests,
             "spending_potential": spending_potential,
-            "last_interaction": datetime.now().isoformat()
+            "last_interaction": datetime.now().isoformat(),
+            "last_response": response
         }
         
         return {
             "fan_id": fan_id,
-            "suggested_response": response,
+            "suggested_response": response["message"],
             "profile": fan_profile,
             "phase": phase,
-            "spending_potential": spending_potential
+            "spending_potential": spending_potential,
+            "compliance": response["compliance"],
+            "manual_send_required": response["manual_send_required"]
         }
     
     def generate_mass_message(self, fan_type: str = "all") -> str:
@@ -191,23 +207,137 @@ def batch_mode(input_file: str):
     
     print(f"\n{Fore.GREEN}Processed {len(results)} fans. Results saved to {output_file}{Style.RESET_ALL}")
 
+def analyze_command(args):
+    """Handle analyze subcommand"""
+    bot = OnlyFansChatBot(account_size=args.account_size)
+    
+    try:
+        messages = json.loads(args.messages)
+    except json.JSONDecodeError:
+        messages = [args.messages]  # Single message
+    
+    result = bot.process_fan_messages(args.fan_id, messages)
+    
+    if args.output == "json":
+        print(json.dumps(result, indent=2))
+    else:
+        print(f"\n{Fore.CYAN}Analysis Result:{Style.RESET_ALL}")
+        print(json.dumps(result, indent=2))
+
+def generate_command(args):
+    """Handle generate subcommand"""
+    bot = OnlyFansChatBot(account_size=args.account_size)
+    
+    try:
+        profile = json.loads(args.profile)
+    except json.JSONDecodeError:
+        print(f"{Fore.RED}Error: Invalid JSON in profile{Style.RESET_ALL}")
+        sys.exit(1)
+    
+    context = {}
+    if args.context:
+        try:
+            context = json.loads(args.context)
+        except json.JSONDecodeError:
+            pass
+    
+    message = bot.generator.generate_message(
+        fan_profile=profile,
+        phase=args.phase,
+        context=context,
+        account_size=args.account_size or bot.account_size
+    )
+    
+    if args.output == "json":
+        print(json.dumps({"message": message}))
+    else:
+        print(f"\n{Fore.CYAN}Generated Message:{Style.RESET_ALL}")
+        print(message)
+
 def main():
     parser = argparse.ArgumentParser(description="OnlyFans AI Chatbot")
-    parser.add_argument("--mode", choices=["interactive", "batch"], default="interactive",
-                       help="Run mode: interactive or batch")
-    parser.add_argument("--input", help="Input file for batch mode")
-    parser.add_argument("--account-size", choices=["small", "large"], default="small",
+    parser.add_argument("--account-size", choices=["small", "large"], 
                        help="Account size affects messaging strategy")
+    parser.add_argument("--output", choices=["text", "json"], default="text",
+                       help="Output format")
+    
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    
+    # Interactive mode (default)
+    interactive_parser = subparsers.add_parser("interactive", help="Run in interactive mode")
+    
+    # Analyze command
+    analyze_parser = subparsers.add_parser("analyze", help="Analyze fan messages")
+    analyze_parser.add_argument("--fan-id", required=True, help="Fan identifier")
+    analyze_parser.add_argument("--messages", required=True, 
+                               help="JSON array of messages or single message")
+    
+    # Generate command
+    generate_parser = subparsers.add_parser("generate", help="Generate message")
+    generate_parser.add_argument("--profile", required=True, 
+                                help="JSON fan profile")
+    generate_parser.add_argument("--phase", required=True,
+                                choices=["intrigue", "rapport", "attraction", "submission"],
+                                help="IRAS phase")
+    generate_parser.add_argument("--context", help="JSON context data")
+    
+    # Batch command
+    batch_parser = subparsers.add_parser("batch", help="Process batch of fans")
+    batch_parser.add_argument("--input", required=True, help="Input JSON file")
+    
+    # Server command
+    server_parser = subparsers.add_parser("server", help="Run as HTTP server")
+    server_parser.add_argument("--port", type=int, default=8001, help="Server port")
+    server_parser.add_argument("--host", default="0.0.0.0", help="Server host")
     
     args = parser.parse_args()
     
-    if args.mode == "batch":
-        if not args.input:
-            print(f"{Fore.RED}Error: --input file required for batch mode{Style.RESET_ALL}")
-            sys.exit(1)
-        batch_mode(args.input)
-    else:
+    # Set up logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    if not args.command or args.command == "interactive":
         interactive_mode()
+    elif args.command == "analyze":
+        analyze_command(args)
+    elif args.command == "generate":
+        generate_command(args)
+    elif args.command == "batch":
+        batch_mode(args.input)
+    elif args.command == "server":
+        # Import here to avoid dependency in CLI mode
+        from flask import Flask, request, jsonify
+        
+        app = Flask(__name__)
+        bot = OnlyFansChatBot()
+        
+        @app.route('/health')
+        def health():
+            return jsonify({"status": "healthy", "compliance_check": config.is_manual_send_required()})
+        
+        @app.route('/analyze', methods=['POST'])
+        def api_analyze():
+            data = request.json
+            result = bot.process_fan_messages(data['fan_id'], data['messages'])
+            return jsonify(result)
+        
+        @app.route('/generate', methods=['POST'])
+        def api_generate():
+            data = request.json
+            message = bot.generator.generate_message(
+                fan_profile=data['profile'],
+                phase=data['phase'],
+                context=data.get('context', {}),
+                account_size=data.get('account_size', bot.account_size)
+            )
+            return jsonify({"message": message, "manual_send_required": config.is_manual_send_required()})
+        
+        print(f"Starting server on {args.host}:{args.port}")
+        app.run(host=args.host, port=args.port)
+    else:
+        parser.print_help()
 
 if __name__ == "__main__":
     main()

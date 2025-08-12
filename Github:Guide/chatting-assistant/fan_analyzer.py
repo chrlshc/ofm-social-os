@@ -4,14 +4,28 @@ import numpy as np
 from typing import Dict, List, Tuple
 import re
 from collections import Counter
+import logging
+
+from config_manager import config
+
+logger = logging.getLogger(__name__)
 
 class FanAnalyzer:
     def __init__(self):
+        # Load spaCy model based on configuration
+        model_name = config.get_spacy_model()
         try:
-            self.nlp = spacy.load("en_core_web_sm")
-        except:
-            print("Please install spacy English model: python -m spacy download en_core_web_sm")
-            self.nlp = None
+            self.nlp = spacy.load(model_name)
+            logger.info(f"Loaded spaCy model: {model_name}")
+        except Exception as e:
+            logger.error(f"Failed to load spaCy model {model_name}: {e}")
+            # Fallback to English model
+            try:
+                self.nlp = spacy.load("en_core_web_sm")
+                logger.warning("Fallback to English model")
+            except:
+                logger.error("No spaCy model available")
+                self.nlp = None
         
         self.emotional_keywords = {
             "need", "feel", "heart", "touch", "care", "love", "miss", 
