@@ -1,0 +1,495 @@
+openapi: 3.0.3
+info:
+  title: OFM Internal Operations API
+  description: |
+    Internal operations API for OFM Social OS with OIDC authentication, RBAC authorization,
+    comprehensive audit logging, and canary deployment management.
+    
+    **Security Model:**
+    - IP/Organization allowlist filtering
+    - OIDC authentication (OpenID Connect)
+    - Role-based access control (admin/operator/viewer)
+    - Comprehensive audit logging for all operations
+    
+    **Roles:**
+    - `viewer`: Read-only access to status and basic information
+    - `operator`: Can view audit logs and perform read operations  
+    - `admin`: Full access including canary management and system operations
+  version: 1.0.0
+  contact:
+    name: OFM Platform Engineering
+    email: platform@ofm.social
+  license:
+    name: Private
+    
+servers:
+  - url: https://internal.ofm.social
+    description: Production internal operations
+  - url: https://internal-staging.ofm.social
+    description: Staging internal operations
+  - url: http://localhost:4010
+    description: Local development
+
+security:
+  - sessionAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Unprotected health check for load balancer monitoring
+      security: []
+      responses:
+        '200':
+          description: Service health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                  service:
+                    type: string
+                    example: ofm-internal-ops
+
+  /login:
+    get:
+      summary: Initiate OIDC login flow
+      description: Redirects to OIDC provider for authentication
+      security: []
+      responses:
+        '302':
+          description: Redirect to OIDC provider
+
+  /oidc/callback:
+    get:
+      summary: OIDC callback endpoint
+      description: Handles OIDC authentication callback
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to internal status page
+        '403':
+          description: Organization not allowed
+
+  /logout:
+    get:
+      summary: Logout user
+      description: Destroys user session and redirects to login
+      responses:
+        '302':
+          description: Redirect to login page
+
+  /internal/status:
+    get:
+      summary: Internal operations status dashboard
+      description: HTML dashboard showing system status and user information
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Status dashboard HTML
+          content:
+            text/html:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /internal/status/healthz:
+    get:
+      summary: Detailed health check
+      description: JSON health check with system information
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Detailed health information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: number
+                    description: Process uptime in seconds
+                  memory:
+                    type: object
+                    description: Memory usage statistics
+                  env:
+                    type: string
+                    description: Environment name
+
+  /internal/audit:
+    get:
+      summary: Get audit logs
+      description: Retrieve paginated audit log entries with optional filtering
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of entries to return
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 1000
+        - name: action
+          in: query
+          description: Filter by action name (partial match)
+          schema:
+            type: string
+        - name: resource
+          in: query
+          description: Filter by resource name (partial match)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLogEntry'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /internal/audit/stats:
+    get:
+      summary: Get audit statistics
+      description: Retrieve audit log statistics and activity summaries
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Audit statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  topActions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        action:
+                          type: string
+                        count:
+                          type: integer
+                  activeUsers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        actor_email:
+                          type: string
+                        count:
+                          type: integer
+                  recentActivity:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        hour:
+                          type: string
+                          format: date-time
+                        count:
+                          type: integer
+
+  /internal/ops:
+    get:
+      summary: Operations control panel
+      description: HTML interface for system operations and canary management
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Operations control panel HTML
+          content:
+            text/html:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /internal/ops/canary/promote:
+    post:
+      summary: Promote canary deployment
+      description: Initiate canary deployment promotion to next stage
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                step:
+                  type: string
+                  description: Promotion step (auto, 25, 50, 75, 100)
+                  default: auto
+      responses:
+        '200':
+          description: Promotion initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /internal/ops/canary/rollback:
+    post:
+      summary: Rollback canary deployment
+      description: Abort canary deployment and rollback to stable version
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Reason for rollback
+                  default: manual_rollback
+      responses:
+        '200':
+          description: Rollback initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /internal/ops/execute:
+    post:
+      summary: Execute system operation
+      description: Execute various system operations like health checks, backups, etc.
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - operation
+              properties:
+                operation:
+                  type: string
+                  enum:
+                    - canary-promote
+                    - canary-pause
+                    - canary-resume
+                    - canary-rollback
+                    - health-check
+                    - slo-status
+                    - db-backup
+                    - security-scan
+                  description: Operation to execute
+                timestamp:
+                  type: string
+                  format: date-time
+                  description: Operation timestamp
+      responses:
+        '200':
+          description: Operation executed successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OperationResult'
+                  - type: object
+                    properties:
+                      operation:
+                        type: string
+                        description: Operation that was executed
+        '400':
+          description: Invalid operation
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /internal/ops/logs:
+    get:
+      summary: View application logs
+      description: Retrieve recent application logs in plain text format
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: lines
+          in: query
+          description: Number of log lines to return
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 10000
+      responses:
+        '200':
+          description: Application logs
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: connect.sid
+      description: Express session cookie for OIDC-authenticated users
+
+  schemas:
+    AuditLogEntry:
+      type: object
+      properties:
+        created_at:
+          type: string
+          format: date-time
+          description: When the operation occurred
+        actor_email:
+          type: string
+          format: email
+          nullable: true
+          description: Email of the user who performed the operation
+        action:
+          type: string
+          description: Action that was performed
+          example: canary_promote
+        resource:
+          type: string
+          description: Resource that was acted upon
+          example: rollout
+        meta:
+          type: object
+          nullable: true
+          description: Additional metadata about the operation
+        ip:
+          type: string
+          format: ipv4
+          nullable: true
+          description: IP address of the client
+
+    OperationResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          description: Whether the operation was successful
+        message:
+          type: string
+          description: Human-readable message about the operation
+        output:
+          type: string
+          nullable: true
+          description: Command output if applicable
+        error:
+          type: string
+          nullable: true
+          description: Error output if applicable
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+        details:
+          type: string
+          description: Additional error details
+        requestId:
+          type: string
+          description: Request ID for troubleshooting
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Authentication required"
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Insufficient permissions"
+            details: "Required role: admin"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Internal server error"
+            requestId: "req_123456"

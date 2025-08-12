@@ -1,0 +1,468 @@
+{
+  "info": {
+    "name": "OFM Internal Operations API",
+    "description": "Collection for testing OFM Internal Operations API with OIDC authentication and RBAC",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "ofm-internal-ops-v1",
+    "version": {
+      "major": 1,
+      "minor": 0,
+      "patch": 0
+    }
+  },
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:4010",
+      "type": "string"
+    },
+    {
+      "key": "SESSION_COOKIE",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Health Check (Unprotected)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/health",
+              "host": ["{{BASE_URL}}"],
+              "path": ["health"]
+            },
+            "description": "Check API health status - no authentication required"
+          }
+        },
+        {
+          "name": "Initiate Login",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/login",
+              "host": ["{{BASE_URL}}"],
+              "path": ["login"]
+            },
+            "description": "Initiates OIDC login flow - will redirect to OIDC provider"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/logout",
+              "host": ["{{BASE_URL}}"],
+              "path": ["logout"]
+            },
+            "description": "Destroy user session and logout"
+          }
+        }
+      ],
+      "description": "Authentication and session management endpoints"
+    },
+    {
+      "name": "Status & Monitoring",
+      "item": [
+        {
+          "name": "Internal Status Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{SESSION_COOKIE}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/internal/status",
+              "host": ["{{BASE_URL}}"],
+              "path": ["internal", "status"]
+            },
+            "description": "HTML dashboard showing system status - requires viewer role"
+          }
+        },
+        {
+          "name": "Detailed Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{SESSION_COOKIE}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/internal/status/healthz",
+              "host": ["{{BASE_URL}}"],
+              "path": ["internal", "status", "healthz"]
+            },
+            "description": "JSON health check with detailed system information"
+          }
+        }
+      ],
+      "description": "System status and health monitoring"
+    },
+    {
+      "name": "Audit Logs",
+      "item": [
+        {
+          "name": "Get Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{SESSION_COOKIE}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/internal/audit?limit=20",
+              "host": ["{{BASE_URL}}"],
+              "path": ["internal", "audit"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Number of entries to return"
+                }
+              ]
+            },
+            "description": "Retrieve audit log entries - requires operator role"
+          }
+        },
+        {
+          "name": "Get Audit Logs with Filters",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{SESSION_COOKIE}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/internal/audit?limit=50&action=canary&resource=rollout",
+              "host": ["{{BASE_URL}}"],
+              "path": ["internal", "audit"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "action",
+                  "value": "canary",
+                  "description": "Filter by action (partial match)"
+                },
+                {
+                  "key": "resource",
+                  "value": "rollout",
+                  "description": "Filter by resource (partial match)"
+                }
+              ]
+            },
+            "description": "Retrieve filtered audit log entries"
+          }
+        },
+        {
+          "name": "Get Audit Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{SESSION_COOKIE}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/internal/audit/stats",
+              "host": ["{{BASE_URL}}"],
+              "path": ["internal", "audit", "stats"]
+            },
+            "description": "Get audit log statistics and summaries"
+          }
+        }
+      ],
+      "description": "Audit logging and analysis - requires operator role"
+    },
+    {
+      "name": "Operations",
+      "item": [
+        {
+          "name": "Operations Control Panel",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{SESSION_COOKIE}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/internal/ops",
+              "host": ["{{BASE_URL}}"],
+              "path": ["internal", "ops"]
+            },
+            "description": "HTML operations control panel - requires admin role"
+          }
+        },
+        {
+          "name": "Promote Canary",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{SESSION_COOKIE}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"step\": \"auto\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/internal/ops/canary/promote",
+              "host": ["{{BASE_URL}}"],
+              "path": ["internal", "ops", "canary", "promote"]
+            },
+            "description": "Promote canary deployment to next stage"
+          }
+        },
+        {
+          "name": "Rollback Canary",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{SESSION_COOKIE}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Performance issues detected\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/internal/ops/canary/rollback",
+              "host": ["{{BASE_URL}}"],
+              "path": ["internal", "ops", "canary", "rollback"]
+            },
+            "description": "Abort and rollback canary deployment"
+          }
+        },
+        {
+          "name": "Execute Health Check",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{SESSION_COOKIE}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operation\": \"health-check\",\n  \"timestamp\": \"{{$isoTimestamp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/internal/ops/execute",
+              "host": ["{{BASE_URL}}"],
+              "path": ["internal", "ops", "execute"]
+            },
+            "description": "Execute system health check"
+          }
+        },
+        {
+          "name": "Execute SLO Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{SESSION_COOKIE}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operation\": \"slo-status\",\n  \"timestamp\": \"{{$isoTimestamp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/internal/ops/execute",
+              "host": ["{{BASE_URL}}"],
+              "path": ["internal", "ops", "execute"]
+            },
+            "description": "Check SLO compliance status"
+          }
+        },
+        {
+          "name": "Execute Database Backup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{SESSION_COOKIE}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operation\": \"db-backup\",\n  \"timestamp\": \"{{$isoTimestamp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/internal/ops/execute",
+              "host": ["{{BASE_URL}}"],
+              "path": ["internal", "ops", "execute"]
+            },
+            "description": "Initiate database backup"
+          }
+        },
+        {
+          "name": "Execute Security Scan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{SESSION_COOKIE}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operation\": \"security-scan\",\n  \"timestamp\": \"{{$isoTimestamp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/internal/ops/execute",
+              "host": ["{{BASE_URL}}"],
+              "path": ["internal", "ops", "execute"]
+            },
+            "description": "Run security scan"
+          }
+        },
+        {
+          "name": "View Application Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{SESSION_COOKIE}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/internal/ops/logs?lines=100",
+              "host": ["{{BASE_URL}}"],
+              "path": ["internal", "ops", "logs"],
+              "query": [
+                {
+                  "key": "lines",
+                  "value": "100",
+                  "description": "Number of log lines to return"
+                }
+              ]
+            },
+            "description": "View recent application logs"
+          }
+        }
+      ],
+      "description": "System operations and canary management - requires admin role"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-extract session cookie from login response",
+          "if (pm.cookies.has('connect.sid')) {",
+          "    pm.collectionVariables.set('SESSION_COOKIE', 'connect.sid=' + pm.cookies.get('connect.sid'));",
+          "}"
+        ]
+      }
+    }
+  ]
+}
