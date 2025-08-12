@@ -1,0 +1,376 @@
+{{- if .Values.canary.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "ofm-social-os.fullname" . }}-api-rollout
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ofm-social-os.labels" . | nindent 4 }}
+    component: api-rollout
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  strategy:
+    canary:
+      # Canary deployment configuration
+      canaryService: {{ include "ofm-social-os.fullname" . }}-api-canary
+      stableService: {{ include "ofm-social-os.fullname" . }}-api
+      
+      # Traffic management
+      trafficRouting:
+        nginx:
+          stableIngress: {{ include "ofm-social-os.fullname" . }}-api
+          annotationPrefix: nginx.ingress.kubernetes.io
+          additionalIngressAnnotations:
+            canary-by-header: "X-Canary"
+            canary-by-header-value: "always"
+      
+      # Canary steps with SLO gates
+      steps:
+      - setWeight: {{ .Values.canary.weight }}
+      - pause:
+          duration: 2m # Initial pause for metrics collection
+      
+      # First SLO gate - Initial validation
+      - analysis:
+          templates:
+          - templateName: {{ include "ofm-social-os.fullname" . }}-slo-analysis
+          args:
+          - name: service-name
+            value: {{ include "ofm-social-os.fullname" . }}-api-canary
+          - name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
+      
+      # Increase traffic if first gate passed
+      - setWeight: {{ mul .Values.canary.weight 2 | int }}
+      - pause:
+          duration: 5m
+      
+      # Second SLO gate - Sustained validation
+      - analysis:
+          templates:
+          - templateName: {{ include "ofm-social-os.fullname" . }}-slo-analysis
+          args:
+          - name: service-name
+            value: {{ include "ofm-social-os.fullname" . }}-api-canary
+          - name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
+      
+      # Final promotion if all gates pass
+      {{- if .Values.canary.autoPromote }}
+      - pause:
+          duration: {{ .Values.canary.duration }}
+      {{- else }}
+      - pause: {} # Manual promotion required
+      {{- end }}
+      
+      # Analysis template for SLO validation
+      analysisRunMetadata:
+        labels:
+          app: {{ include "ofm-social-os.name" . }}
+          version: canary
+      
+      # Automatic rollback configuration
+      abortScaleDownDelaySeconds: 30
+      scaleDownDelaySeconds: 30
+      
+  selector:
+    matchLabels:
+      {{- include "ofm-social-os.selectorLabels" . | nindent 6 }}
+      component: api
+  
+  template:
+    metadata:
+      labels:
+        {{- include "ofm-social-os.selectorLabels" . | nindent 8 }}
+        component: api
+        version: "{{ .Values.api.image.tag }}"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: {{ include "ofm-social-os.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.api.podSecurityContext | nindent 8 }}
+      containers:
+      - name: api
+        image: "{{ .Values.global.imageRegistry }}{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+        imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.api.service.port }}
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: {{ .Values.global.environment }}
+        - name: PORT
+          value: "{{ .Values.api.service.port }}"
+        - name: VERSION
+          value: "{{ .Values.api.image.tag }}"
+        - name: CANARY_ENABLED
+          value: "{{ .Values.canary.enabled }}"
+        {{- if .Values.canary.enabled }}
+        - name: X_VERSION_HEADER
+          value: "canary"
+        {{- end }}
+        # Database configuration
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ofm-social-os.fullname" . }}-secret
+              key: database-url
+        # Redis configuration
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ofm-social-os.fullname" . }}-secret
+              key: redis-url
+        # AWS S3 configuration
+        - name: AWS_S3_BUCKET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ofm-social-os.fullname" . }}-secret
+              key: aws-s3-bucket
+        - name: AWS_REGION
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ofm-social-os.fullname" . }}-secret
+              key: aws-region
+        # Platform API keys (encrypted)
+        - name: INSTAGRAM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ofm-social-os.fullname" . }}-secret
+              key: instagram-api-key
+        - name: TIKTOK_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ofm-social-os.fullname" . }}-secret
+              key: tiktok-api-key
+        - name: REDDIT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ofm-social-os.fullname" . }}-secret
+              key: reddit-api-key
+        # Webhook secrets
+        - name: WEBHOOK_SECRET_TIKTOK
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ofm-social-os.fullname" . }}-secret
+              key: webhook-secret-tiktok
+        - name: WEBHOOK_SECRET_META
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ofm-social-os.fullname" . }}-secret
+              key: webhook-secret-meta
+        # Temporal configuration
+        - name: TEMPORAL_ADDRESS
+          value: "{{ .Values.temporal.address }}"
+        - name: TEMPORAL_NAMESPACE
+          value: "{{ .Values.temporal.namespace }}"
+        # Feature flags configuration
+        - name: FEATURE_FLAGS_REDIS_KEY_PREFIX
+          value: "feature_flags:{{ .Values.global.environment }}"
+        {{- range $platform, $config := .Values.featureFlags.platforms }}
+        - name: FEATURE_FLAG_{{ upper $platform }}_ENABLED
+          value: "{{ $config.enabled }}"
+        - name: FEATURE_FLAG_{{ upper $platform }}_CANARY_PERCENTAGE
+          value: "{{ $config.canaryPercentage }}"
+        {{- end }}
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        # Startup probe for slower initialization
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 12 # Allow up to 2 minutes for startup
+        
+        resources:
+          {{- toYaml .Values.api.resources | nindent 10 }}
+        
+        securityContext:
+          {{- toYaml .Values.api.securityContext | nindent 10 }}
+        
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/cache
+      
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir:
+          sizeLimit: 1Gi
+      
+      nodeSelector:
+        {{- toYaml .Values.api.nodeSelector | nindent 8 }}
+      
+      affinity:
+        # Prefer spreading across nodes
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  {{- include "ofm-social-os.selectorLabels" . | nindent 18 }}
+                  component: api
+              topologyKey: kubernetes.io/hostname
+      
+      tolerations:
+        {{- toYaml .Values.api.tolerations | nindent 8 }}
+      
+      # Termination settings for graceful shutdown
+      terminationGracePeriodSeconds: 30
+
+---
+# SLO Analysis Template for Canary Gates
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "ofm-social-os.fullname" . }}-slo-analysis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ofm-social-os.labels" . | nindent 4 }}
+spec:
+  args:
+  - name: service-name
+  - name: canary-hash
+  
+  metrics:
+  # SLO Gate 1: P95 Latency < 10 seconds
+  - name: latency-p95
+    interval: 1m
+    count: 5
+    successCondition: result[0] <= 10000 # 10 seconds in milliseconds
+    failureLimit: 2 # Allow 2 failures out of 5 checks
+    provider:
+      prometheus:
+        address: http://prometheus-server.monitoring.svc.cluster.local
+        query: |
+          histogram_quantile(0.95,
+            sum by(le)(
+              rate(http_request_duration_seconds_bucket{
+                service="{{`{{.args.service-name}}`}}",
+                version="canary"
+              }[5m])
+            )
+          ) * 1000
+  
+  # SLO Gate 2: Success Rate >= 95%
+  - name: success-rate
+    interval: 1m
+    count: 5
+    successCondition: result[0] >= 0.95
+    failureLimit: 1 # Only allow 1 failure for success rate
+    provider:
+      prometheus:
+        address: http://prometheus-server.monitoring.svc.cluster.local
+        query: |
+          sum(rate(http_requests_total{
+            service="{{`{{.args.service-name}}`}}",
+            version="canary",
+            status!~"5.."
+          }[5m])) / 
+          sum(rate(http_requests_total{
+            service="{{`{{.args.service-name}}`}}",
+            version="canary"
+          }[5m]))
+  
+  # SLO Gate 3: Webhook Signature Verification = 100%
+  - name: webhook-signature-verification
+    interval: 1m
+    count: 5
+    successCondition: result[0] >= 0.999 # 99.9% allowing for minor measurement noise
+    failureLimit: 0 # Zero tolerance for signature failures
+    provider:
+      prometheus:
+        address: http://prometheus-server.monitoring.svc.cluster.local
+        query: |
+          sum(rate(webhook_signature_verified_total{
+            service="{{`{{.args.service-name}}`}}",
+            version="canary"
+          }[5m])) / 
+          sum(rate(webhook_signature_total{
+            service="{{`{{.args.service-name}}`}}",
+            version="canary"
+          }[5m]))
+  
+  # SLO Gate 4: P99 Latency < 15 seconds (secondary check)
+  - name: latency-p99
+    interval: 1m
+    count: 5
+    successCondition: result[0] <= 15000 # 15 seconds in milliseconds
+    failureLimit: 2
+    provider:
+      prometheus:
+        address: http://prometheus-server.monitoring.svc.cluster.local
+        query: |
+          histogram_quantile(0.99,
+            sum by(le)(
+              rate(http_request_duration_seconds_bucket{
+                service="{{`{{.args.service-name}}`}}",
+                version="canary"
+              }[5m])
+            )
+          ) * 1000
+  
+  # SLO Gate 5: Database Connection Health
+  - name: database-connections
+    interval: 1m
+    count: 3
+    successCondition: result[0] >= 1 # At least 1 active connection
+    failureLimit: 1
+    provider:
+      prometheus:
+        address: http://prometheus-server.monitoring.svc.cluster.local
+        query: |
+          sum(database_connections_active{
+            service="{{`{{.args.service-name}}`}}",
+            version="canary"
+          })
+  
+  # SLO Gate 6: Queue Backlog Reasonable
+  - name: temporal-queue-backlog
+    interval: 1m
+    count: 3
+    successCondition: result[0] <= 1000 # Max 1000 queued tasks
+    failureLimit: 2
+    provider:
+      prometheus:
+        address: http://prometheus-server.monitoring.svc.cluster.local
+        query: |
+          sum(temporal_task_queue_backlog{
+            service="{{`{{.args.service-name}}`}}",
+            version="canary"
+          })
+
+{{- end }}

@@ -1,0 +1,478 @@
+name: Chaos Engineering - Smoke Tests
+
+on:
+  # Run chaos smoke tests on pull requests to main
+  pull_request:
+    branches: [main]
+    paths:
+      - 'marketing/backend/**'
+      - 'marketing/chaos/**'
+      - 'marketing/k8s/**'
+      - '.github/workflows/chaos-smoke-ci.yml'
+  
+  # Manual trigger for on-demand chaos testing
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to test'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      chaos_scenario:
+        description: 'Chaos scenario to run'
+        required: true
+        default: 'pod-kill'
+        type: choice
+        options:
+          - pod-kill
+          - redis-unavailable
+          - memory-pressure
+          - s3-5xx
+          - postgres-failover
+      duration:
+        description: 'Chaos duration in seconds'
+        required: false
+        default: '180'
+        type: string
+
+env:
+  CHAOS_ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
+  CHAOS_DURATION: ${{ github.event.inputs.duration || '180' }}
+  RESULTS_BUCKET: 'ofm-chaos-results'
+
+concurrency:
+  group: chaos-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: write
+
+jobs:
+  # =============================================
+  # Pre-Chaos Health Check
+  # =============================================
+  pre-chaos-check:
+    runs-on: ubuntu-latest
+    outputs:
+      system-healthy: ${{ steps.health.outputs.healthy }}
+      baseline-metrics: ${{ steps.health.outputs.metrics }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: System health check
+        id: health
+        run: |
+          ENVIRONMENT="${{ env.CHAOS_ENVIRONMENT }}"
+          NAMESPACE="ofm-${ENVIRONMENT}"
+          
+          echo "🔍 Checking system health before chaos injection..."
+          
+          # Check pod health
+          READY_PODS=$(kubectl get pods -n "$NAMESPACE" --field-selector=status.phase=Running --no-headers | wc -l)
+          TOTAL_PODS=$(kubectl get pods -n "$NAMESPACE" --no-headers | wc -l)
+          
+          echo "Pods: $READY_PODS/$TOTAL_PODS ready"
+          
+          # Check service endpoints
+          API_URL="https://api-${ENVIRONMENT}.ofm.social"
+          
+          if curl -f --max-time 30 "$API_URL/health" > /dev/null; then
+            echo "✅ API health endpoint responding"
+            API_HEALTHY=true
+          else
+            echo "❌ API health endpoint not responding"
+            API_HEALTHY=false
+          fi
+          
+          # Determine overall health
+          if [[ $READY_PODS -gt 0 ]] && [[ $API_HEALTHY == "true" ]]; then
+            echo "healthy=true" >> $GITHUB_OUTPUT
+            echo "✅ System is healthy for chaos testing"
+          else
+            echo "healthy=false" >> $GITHUB_OUTPUT
+            echo "❌ System is not healthy for chaos testing"
+          fi
+          
+          # Collect baseline metrics
+          echo "metrics={\"ready_pods\":$READY_PODS,\"total_pods\":$TOTAL_PODS,\"api_healthy\":$API_HEALTHY}" >> $GITHUB_OUTPUT
+
+  # =============================================
+  # Chaos Smoke Tests
+  # =============================================
+  chaos-smoke-tests:
+    needs: pre-chaos-check
+    if: needs.pre-chaos-check.outputs.system-healthy == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: 
+          # For PR: only run lightweight smoke tests
+          ${{ github.event_name == 'pull_request' && fromJson('["pod-kill", "memory-pressure"]') || fromJson('["pod-kill", "redis-unavailable", "memory-pressure"]') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: Install dependencies
+        run: |
+          # Install bc for calculations
+          sudo apt-get update && sudo apt-get install -y bc jq curl
+          
+          # Verify tools
+          kubectl version --client
+          aws --version
+          bc --version
+
+      - name: Run chaos smoke test
+        id: chaos-test
+        env:
+          CHAOS_SCENARIO: ${{ matrix.scenario }}
+          DRY_RUN: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+          PROMETHEUS_URL: https://prometheus-${{ env.CHAOS_ENVIRONMENT }}.ofm.social
+        run: |
+          cd marketing/chaos/scripts
+          
+          echo "🔥 Running chaos smoke test: $CHAOS_SCENARIO"
+          echo "Environment: $CHAOS_ENVIRONMENT"
+          echo "Duration: ${CHAOS_DURATION}s"
+          echo "Dry Run: $DRY_RUN"
+          
+          # Adjust duration for PR smoke tests
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            CHAOS_DURATION=60  # 1 minute for PR smoke tests
+          fi
+          
+          # Run chaos injection
+          ./chaos-inject.sh "$CHAOS_SCENARIO" \
+            --environment "$CHAOS_ENVIRONMENT" \
+            --duration "$CHAOS_DURATION" \
+            --results-dir "./chaos-results" \
+            $(if [[ "$DRY_RUN" == "true" ]]; then echo "--dry-run"; fi)
+
+      - name: Analyze chaos results
+        run: |
+          cd marketing/chaos/scripts
+          
+          echo "📊 Analyzing chaos test results..."
+          
+          # Check if results directory exists
+          if [[ ! -d "./chaos-results" ]]; then
+            echo "⚠️  No results directory found (expected for dry run)"
+            exit 0
+          fi
+          
+          # Find latest results for this scenario
+          RESULTS_FILE=$(find ./chaos-results -name "chaos_${{ matrix.scenario }}_*.json" -type f | sort | tail -n1)
+          
+          if [[ -n "$RESULTS_FILE" ]] && [[ -f "$RESULTS_FILE" ]]; then
+            echo "📈 Results file: $RESULTS_FILE"
+            
+            # Extract key metrics
+            MAX_ERROR_RATE=$(jq -r 'select(.error_rate != null) | .error_rate' "$RESULTS_FILE" | jq -s 'max // 0')
+            MIN_RUNNING_PODS=$(jq -r 'select(.pods != null) | .pods.running' "$RESULTS_FILE" | jq -s 'min // 0')
+            
+            echo "Max Error Rate: $MAX_ERROR_RATE"
+            echo "Min Running Pods: $MIN_RUNNING_PODS"
+            
+            # Determine if chaos test passed
+            if (( $(echo "$MAX_ERROR_RATE <= 0.1" | bc -l) )) && [[ "$MIN_RUNNING_PODS" -gt 0 ]]; then
+              echo "✅ Chaos smoke test PASSED for ${{ matrix.scenario }}"
+            else
+              echo "❌ Chaos smoke test FAILED for ${{ matrix.scenario }}"
+              exit 1
+            fi
+          else
+            echo "⚠️  No results file found - may be expected for dry run"
+          fi
+
+      - name: Upload chaos results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chaos-${{ matrix.scenario }}-results
+          path: marketing/chaos/scripts/chaos-results/
+          retention-days: 30
+
+  # =============================================
+  # Post-Chaos Health Check
+  # =============================================
+  post-chaos-check:
+    needs: [pre-chaos-check, chaos-smoke-tests]
+    if: always() && needs.pre-chaos-check.outputs.system-healthy == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: System recovery check
+        run: |
+          ENVIRONMENT="${{ env.CHAOS_ENVIRONMENT }}"
+          NAMESPACE="ofm-${ENVIRONMENT}"
+          
+          echo "🔍 Checking system recovery after chaos injection..."
+          
+          # Wait for system stabilization
+          echo "⏳ Waiting for system stabilization (60 seconds)..."
+          sleep 60
+          
+          # Check pod recovery
+          READY_PODS=$(kubectl get pods -n "$NAMESPACE" --field-selector=status.phase=Running --no-headers | wc -l)
+          BASELINE_PODS=$(echo '${{ needs.pre-chaos-check.outputs.baseline-metrics }}' | jq -r '.ready_pods')
+          
+          echo "Pods after chaos: $READY_PODS"
+          echo "Baseline pods: $BASELINE_PODS"
+          
+          # Check API recovery
+          API_URL="https://api-${ENVIRONMENT}.ofm.social"
+          
+          if curl -f --max-time 30 "$API_URL/health" > /dev/null; then
+            echo "✅ API recovered successfully"
+            API_RECOVERED=true
+          else
+            echo "❌ API not recovered"
+            API_RECOVERED=false
+          fi
+          
+          # Determine recovery success
+          RECOVERY_THRESHOLD=0.8  # 80% of baseline pods
+          MIN_REQUIRED_PODS=$(echo "$BASELINE_PODS * $RECOVERY_THRESHOLD" | bc | cut -d. -f1)
+          
+          if [[ $READY_PODS -ge $MIN_REQUIRED_PODS ]] && [[ $API_RECOVERED == "true" ]]; then
+            echo "✅ System recovered successfully"
+            echo "Recovery rate: $(echo "scale=1; $READY_PODS * 100 / $BASELINE_PODS" | bc)%"
+          else
+            echo "❌ System recovery incomplete"
+            echo "Recovery rate: $(echo "scale=1; $READY_PODS * 100 / $BASELINE_PODS" | bc)%"
+            
+            # Still exit 0 for smoke tests - just log the issue
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              echo "⚠️  Recovery issue detected but not failing PR smoke test"
+            else
+              exit 1
+            fi
+          fi
+
+  # =============================================
+  # Generate Chaos Report
+  # =============================================
+  generate-report:
+    needs: [pre-chaos-check, chaos-smoke-tests, post-chaos-check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all chaos results
+        uses: actions/download-artifact@v4
+        with:
+          path: chaos-results/
+
+      - name: Generate chaos smoke report
+        run: |
+          echo "📊 Generating Chaos Smoke Test Report" > report.md
+          echo "====================================" >> report.md
+          echo "" >> report.md
+          
+          # Test configuration
+          echo "**Configuration:**" >> report.md
+          echo "- Environment: ${{ env.CHAOS_ENVIRONMENT }}" >> report.md
+          echo "- Duration: ${{ env.CHAOS_DURATION }} seconds" >> report.md
+          echo "- Trigger: ${{ github.event_name }}" >> report.md
+          echo "" >> report.md
+          
+          # Pre-chaos health
+          echo "**Pre-Chaos Health:**" >> report.md
+          if [[ "${{ needs.pre-chaos-check.outputs.system-healthy }}" == "true" ]]; then
+            echo "- System Status: ✅ HEALTHY" >> report.md
+          else
+            echo "- System Status: ❌ UNHEALTHY" >> report.md
+          fi
+          echo "- Baseline: ${{ needs.pre-chaos-check.outputs.baseline-metrics }}" >> report.md
+          echo "" >> report.md
+          
+          # Chaos test results
+          echo "**Chaos Test Results:**" >> report.md
+          
+          OVERALL_STATUS="✅ PASSED"
+          
+          # Check individual test results
+          if [[ "${{ needs.chaos-smoke-tests.result }}" != "success" ]]; then
+            OVERALL_STATUS="❌ FAILED"
+            echo "- Chaos Tests: ❌ FAILED" >> report.md
+          else
+            echo "- Chaos Tests: ✅ PASSED" >> report.md
+          fi
+          
+          if [[ "${{ needs.post-chaos-check.result }}" != "success" ]]; then
+            if [[ "$OVERALL_STATUS" != "❌ FAILED" ]]; then
+              OVERALL_STATUS="⚠️ PARTIAL"
+            fi
+            echo "- System Recovery: ❌ INCOMPLETE" >> report.md
+          else
+            echo "- System Recovery: ✅ COMPLETE" >> report.md
+          fi
+          
+          echo "" >> report.md
+          echo "**Overall Status: $OVERALL_STATUS**" >> report.md
+          echo "" >> report.md
+          
+          # Recommendations
+          echo "**Recommendations:**" >> report.md
+          if [[ "$OVERALL_STATUS" == "✅ PASSED" ]]; then
+            echo "- System demonstrated good resilience to chaos" >> report.md
+            echo "- Continue regular chaos engineering practices" >> report.md
+          elif [[ "$OVERALL_STATUS" == "⚠️ PARTIAL" ]]; then
+            echo "- Review system recovery procedures" >> report.md
+            echo "- Consider increasing resource limits or replica counts" >> report.md
+          else
+            echo "- ⚠️ System resilience needs improvement" >> report.md
+            echo "- Review failed scenarios and implement fixes" >> report.md
+            echo "- Consider additional monitoring and alerting" >> report.md
+          fi
+          
+          cat report.md
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('report.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔥 Chaos Engineering Smoke Test Results\n\n${report}`
+            });
+
+      - name: Export results to SARIF
+        run: |
+          # Generate SARIF format for security/quality scanning integration
+          cat > chaos-results.sarif << EOF
+          {
+            "\$schema": "https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0.json",
+            "version": "2.1.0",
+            "runs": [
+              {
+                "tool": {
+                  "driver": {
+                    "name": "Chaos Engineering",
+                    "version": "1.0.0",
+                    "informationUri": "https://github.com/ofm/chaos-engineering"
+                  }
+                },
+                "results": [
+          EOF
+          
+          # Add results based on test outcomes
+          if [[ "${{ needs.chaos-smoke-tests.result }}" == "success" ]]; then
+            cat >> chaos-results.sarif << EOF
+                  {
+                    "ruleId": "chaos-resilience",
+                    "level": "note",
+                    "message": {
+                      "text": "System demonstrated resilience to chaos injection"
+                    },
+                    "locations": [
+                      {
+                        "physicalLocation": {
+                          "artifactLocation": {
+                            "uri": "marketing/backend/"
+                          }
+                        }
+                      }
+                    ]
+                  }
+          EOF
+          else
+            cat >> chaos-results.sarif << EOF
+                  {
+                    "ruleId": "chaos-resilience",
+                    "level": "warning",
+                    "message": {
+                      "text": "System showed vulnerability to chaos injection - review resilience patterns"
+                    },
+                    "locations": [
+                      {
+                        "physicalLocation": {
+                          "artifactLocation": {
+                            "uri": "marketing/backend/"
+                          }
+                        }
+                      }
+                    ]
+                  }
+          EOF
+          fi
+          
+          cat >> chaos-results.sarif << EOF
+                ]
+              }
+            ]
+          }
+          EOF
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: chaos-results.sarif
+
+      - name: Set job status
+        run: |
+          if [[ "${{ needs.pre-chaos-check.outputs.system-healthy }}" != "true" ]]; then
+            echo "❌ System was not healthy for chaos testing"
+            exit 1
+          elif [[ "${{ needs.chaos-smoke-tests.result }}" != "success" ]]; then
+            echo "❌ Chaos smoke tests failed"
+            exit 1
+          else
+            echo "✅ Chaos smoke tests completed successfully"
+            
+            if [[ "${{ needs.post-chaos-check.result }}" != "success" ]]; then
+              echo "⚠️  System recovery was incomplete but smoke tests passed"
+              
+              # For PRs, warn but don't fail
+              if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                echo "This is a smoke test on PR - monitoring for improvement"
+              else
+                exit 1
+              fi
+            fi
+          fi

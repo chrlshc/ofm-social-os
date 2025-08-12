@@ -1,0 +1,639 @@
+name: Load Test CI Integration
+
+on:
+  # Run load tests on pull requests to main
+  pull_request:
+    branches: [main]
+    paths:
+      - 'marketing/backend/**'
+      - 'marketing/tests/load/**'
+      - '.github/workflows/load-test-ci.yml'
+  
+  # Manual trigger for comprehensive load testing
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of load test to run'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke      # Quick validation test
+          - load       # Standard load test
+          - stress     # Stress test to find limits
+          - soak       # Extended soak test (2 hours)
+          - profile    # Profile-enhanced test
+      environment:
+        description: 'Environment to test against'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      max_vus:
+        description: 'Maximum virtual users'
+        required: false
+        default: '50'
+        type: string
+      duration:
+        description: 'Test duration (for non-soak tests)'
+        required: false
+        default: '5m'
+        type: string
+
+env:
+  K6_VERSION: '0.47.0'
+  RESULTS_BUCKET: 'ofm-load-test-results'
+
+concurrency:
+  group: load-test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: write
+
+jobs:
+  # =============================================
+  # Determine Test Configuration
+  # =============================================
+  configure-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      test-type: ${{ steps.config.outputs.test-type }}
+      environment: ${{ steps.config.outputs.environment }}
+      max-vus: ${{ steps.config.outputs.max-vus }}
+      duration: ${{ steps.config.outputs.duration }}
+      should-run-soak: ${{ steps.config.outputs.should-run-soak }}
+      should-run-profile: ${{ steps.config.outputs.should-run-profile }}
+    steps:
+      - name: Configure test parameters
+        id: config
+        run: |
+          # Determine test type based on trigger
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TEST_TYPE="${{ github.event.inputs.test_type }}"
+            ENVIRONMENT="${{ github.event.inputs.environment }}"
+            MAX_VUS="${{ github.event.inputs.max_vus }}"
+            DURATION="${{ github.event.inputs.duration }}"
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # Use smoke tests for PRs
+            TEST_TYPE="smoke"
+            ENVIRONMENT="staging"
+            MAX_VUS="10"
+            DURATION="2m"
+          else
+            # Default for push to main
+            TEST_TYPE="load"
+            ENVIRONMENT="staging"
+            MAX_VUS="25"
+            DURATION="5m"
+          fi
+          
+          # Special handling for soak and profile tests
+          SHOULD_RUN_SOAK="false"
+          SHOULD_RUN_PROFILE="false"
+          
+          if [[ "$TEST_TYPE" == "soak" ]]; then
+            SHOULD_RUN_SOAK="true"
+            DURATION="2h"
+          elif [[ "$TEST_TYPE" == "profile" ]]; then
+            SHOULD_RUN_PROFILE="true"
+          fi
+          
+          echo "test-type=$TEST_TYPE" >> $GITHUB_OUTPUT
+          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
+          echo "max-vus=$MAX_VUS" >> $GITHUB_OUTPUT
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "should-run-soak=$SHOULD_RUN_SOAK" >> $GITHUB_OUTPUT
+          echo "should-run-profile=$SHOULD_RUN_PROFILE" >> $GITHUB_OUTPUT
+          
+          echo "📋 Load Test Configuration:"
+          echo "  Test Type: $TEST_TYPE"
+          echo "  Environment: $ENVIRONMENT"
+          echo "  Max VUs: $MAX_VUS"
+          echo "  Duration: $DURATION"
+
+  # =============================================
+  # Environment Health Check
+  # =============================================
+  health-check:
+    needs: configure-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check target environment health
+        run: |
+          ENVIRONMENT="${{ needs.configure-tests.outputs.environment }}"
+          API_URL="https://api-${ENVIRONMENT}.ofm.social"
+          
+          echo "🔍 Checking $ENVIRONMENT environment health..."
+          
+          # Health endpoint check
+          if curl -f --max-time 30 "$API_URL/health"; then
+            echo "✅ API health check passed"
+          else
+            echo "❌ API health check failed"
+            exit 1
+          fi
+          
+          # Check system metrics endpoint
+          if curl -f --max-time 10 "$API_URL/admin/metrics/system" > /dev/null 2>&1; then
+            echo "✅ Metrics endpoint accessible"
+          else
+            echo "⚠️  Metrics endpoint not accessible (optional)"
+          fi
+          
+          echo "✅ Environment is healthy for load testing"
+
+  # =============================================
+  # Quick Smoke Test (Always Runs First)
+  # =============================================
+  smoke-test:
+    needs: [configure-tests, health-check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          curl -L https://github.com/grafana/k6/releases/download/v${{ env.K6_VERSION }}/k6-v${{ env.K6_VERSION }}-linux-amd64.tar.gz | tar -xz
+          sudo mv k6-v${{ env.K6_VERSION }}-linux-amd64/k6 /usr/local/bin/
+
+      - name: Run smoke test
+        env:
+          K6_BASE_URL: https://api-${{ needs.configure-tests.outputs.environment }}.ofm.social
+          K6_API_KEY: ${{ secrets.LOAD_TEST_API_KEY }}
+          K6_TEST_CREATOR_ID: load-test-creator
+          K6_MAX_VUS: 5
+          K6_TEST_DURATION: 1m
+        run: |
+          cd marketing/tests/load/k6
+          
+          echo "🚀 Running smoke test..."
+          
+          # Create a lightweight smoke test configuration
+          cat > smoke-config.js << 'EOF'
+          import { baseConfig } from './config/base.js';
+          
+          export const options = {
+            ...baseConfig,
+            scenarios: {
+              smoke: {
+                executor: 'constant-vus',
+                vus: 2,
+                duration: '30s',
+                tags: { test_type: 'smoke' },
+              }
+            },
+            thresholds: {
+              'http_req_duration': ['p(95) < 15000'], // Relaxed for smoke
+              'http_req_failed': ['rate < 0.05'],     // Allow 5% failures
+            }
+          };
+          
+          export { default } from './scenarios/publish.js';
+          EOF
+          
+          # Run smoke test
+          k6 run smoke-config.js \
+            --out json=results/smoke-test.json \
+            --summary-export=results/smoke-summary.json
+          
+          # Check if smoke test passed
+          if [[ $? -eq 0 ]]; then
+            echo "✅ Smoke test passed - system ready for load testing"
+          else
+            echo "❌ Smoke test failed - system not ready for load testing"
+            exit 1
+          fi
+
+      - name: Upload smoke test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-results
+          path: marketing/tests/load/k6/results/
+
+  # =============================================
+  # Standard Load Tests
+  # =============================================
+  load-tests:
+    needs: [configure-tests, smoke-test]
+    if: needs.configure-tests.outputs.should-run-soak == 'false' && needs.configure-tests.outputs.should-run-profile == 'false'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [publish, upload, webhooks]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          curl -L https://github.com/grafana/k6/releases/download/v${{ env.K6_VERSION }}/k6-v${{ env.K6_VERSION }}-linux-amd64.tar.gz | tar -xz
+          sudo mv k6-v${{ env.K6_VERSION }}-linux-amd64/k6 /usr/local/bin/
+
+      - name: Run ${{ matrix.scenario }} load test
+        env:
+          K6_BASE_URL: https://api-${{ needs.configure-tests.outputs.environment }}.ofm.social
+          K6_API_KEY: ${{ secrets.LOAD_TEST_API_KEY }}
+          K6_TEST_CREATOR_ID: load-test-creator
+          K6_MAX_VUS: ${{ needs.configure-tests.outputs.max-vus }}
+          K6_TEST_DURATION: ${{ needs.configure-tests.outputs.duration }}
+          K6_PROMETHEUS_ENDPOINT: https://prometheus-${{ needs.configure-tests.outputs.environment }}.ofm.social
+        run: |
+          cd marketing/tests/load/k6
+          mkdir -p results
+          
+          echo "🚀 Running ${{ matrix.scenario }} load test..."
+          echo "  Max VUs: $K6_MAX_VUS"
+          echo "  Duration: $K6_TEST_DURATION"
+          echo "  Environment: ${{ needs.configure-tests.outputs.environment }}"
+          
+          # Run the test with comprehensive output
+          k6 run scenarios/${{ matrix.scenario }}.js \
+            --out json=results/${{ matrix.scenario }}-test.json \
+            --out csv=results/${{ matrix.scenario }}-test.csv \
+            --summary-export=results/${{ matrix.scenario }}-summary.json \
+            --quiet
+
+      - name: Analyze test results
+        run: |
+          cd marketing/tests/load/k6/results
+          
+          echo "📊 Analyzing ${{ matrix.scenario }} test results..."
+          
+          # Extract key metrics using jq
+          if [[ -f "${{ matrix.scenario }}-summary.json" ]]; then
+            echo "📈 Test Summary for ${{ matrix.scenario }}:"
+            echo "======================================"
+            
+            jq -r '
+              "🎯 Overall Results:",
+              "  Total Requests: " + (.metrics.http_reqs.values.count // 0 | tostring),
+              "  Failed Requests: " + ((.metrics.http_req_failed.values.rate // 0) * 100 | tostring) + "%",
+              "  Avg Response Time: " + (.metrics.http_req_duration.values.avg // 0 | tostring) + "ms",
+              "  P95 Response Time: " + (.metrics.http_req_duration.values."p(95)" // 0 | tostring) + "ms",
+              "  P99 Response Time: " + (.metrics.http_req_duration.values."p(99)" // 0 | tostring) + "ms",
+              "",
+              "🚨 SLO Compliance:",
+              if (.metrics.http_req_duration.values."p(95)" // 0) <= 10000 then
+                "  P95 Latency: ✅ PASS (≤10s)"
+              else
+                "  P95 Latency: ❌ FAIL (>10s)"
+              end,
+              if (.metrics.http_req_duration.values."p(99)" // 0) <= 15000 then
+                "  P99 Latency: ✅ PASS (≤15s)"
+              else
+                "  P99 Latency: ❌ FAIL (>15s)"
+              end,
+              if (.metrics.http_req_failed.values.rate // 0) <= 0.01 then
+                "  Error Rate: ✅ PASS (≤1%)"
+              else
+                "  Error Rate: ❌ FAIL (>1%)"
+              end
+            ' "${{ matrix.scenario }}-summary.json"
+            
+            # Check if thresholds were met
+            P95_LATENCY=$(jq -r '.metrics.http_req_duration.values."p(95)" // 0' "${{ matrix.scenario }}-summary.json")
+            P99_LATENCY=$(jq -r '.metrics.http_req_duration.values."p(99)" // 0' "${{ matrix.scenario }}-summary.json")
+            ERROR_RATE=$(jq -r '.metrics.http_req_failed.values.rate // 0' "${{ matrix.scenario }}-summary.json")
+            
+            # Fail the job if SLO thresholds are exceeded
+            FAILED=false
+            
+            if (( $(echo "$P95_LATENCY > 10000" | bc -l) )); then
+              echo "❌ P95 latency threshold exceeded: ${P95_LATENCY}ms > 10000ms"
+              FAILED=true
+            fi
+            
+            if (( $(echo "$P99_LATENCY > 15000" | bc -l) )); then
+              echo "❌ P99 latency threshold exceeded: ${P99_LATENCY}ms > 15000ms"
+              FAILED=true
+            fi
+            
+            if (( $(echo "$ERROR_RATE > 0.01" | bc -l) )); then
+              echo "❌ Error rate threshold exceeded: $(echo "$ERROR_RATE * 100" | bc)% > 1%"
+              FAILED=true
+            fi
+            
+            if [[ "$FAILED" == "true" ]]; then
+              echo "💥 Load test failed - SLO thresholds exceeded"
+              exit 1
+            else
+              echo "✅ Load test passed - all SLO thresholds met"
+            fi
+          fi
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.scenario }}-test-results
+          path: marketing/tests/load/k6/results/
+
+  # =============================================
+  # Soak Test (2 Hours)
+  # =============================================
+  soak-test:
+    needs: [configure-tests, smoke-test]
+    if: needs.configure-tests.outputs.should-run-soak == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150 # 2.5 hours timeout
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          curl -L https://github.com/grafana/k6/releases/download/v${{ env.K6_VERSION }}/k6-v${{ env.K6_VERSION }}-linux-amd64.tar.gz | tar -xz
+          sudo mv k6-v${{ env.K6_VERSION }}-linux-amd64/k6 /usr/local/bin/
+
+      - name: Run soak test
+        env:
+          K6_BASE_URL: https://api-${{ needs.configure-tests.outputs.environment }}.ofm.social
+          K6_API_KEY: ${{ secrets.LOAD_TEST_API_KEY }}
+          K6_TEST_CREATOR_ID: soak-test-creator
+          K6_PROMETHEUS_ENDPOINT: https://prometheus-${{ needs.configure-tests.outputs.environment }}.ofm.social
+        run: |
+          cd marketing/tests/load/k6
+          mkdir -p results
+          
+          echo "🔥 Starting 2-hour soak test..."
+          echo "⚠️  This test will run for approximately 2 hours"
+          echo "🔍 Monitor system resources during test execution"
+          
+          # Run soak test with progress monitoring
+          k6 run scenarios/soak.js \
+            --out json=results/soak-test.json \
+            --out csv=results/soak-test.csv \
+            --summary-export=results/soak-summary.json
+
+      - name: Analyze soak test results
+        run: |
+          cd marketing/tests/load/k6/results
+          
+          echo "🔍 Analyzing soak test results..."
+          
+          if [[ -f "soak-summary.json" ]]; then
+            echo "📊 Soak Test Results (2 Hours):"
+            echo "==============================="
+            
+            jq -r '
+              "📈 Performance Summary:",
+              "  Total Duration: " + ((.root_group.duration // 0) / 1000 / 60 | floor | tostring) + " minutes",
+              "  Total Requests: " + (.metrics.http_reqs.values.count // 0 | tostring),
+              "  Requests/Second: " + ((.metrics.http_reqs.values.rate // 0) | tostring),
+              "  Failed Requests: " + ((.metrics.http_req_failed.values.rate // 0) * 100 | tostring) + "%",
+              "",
+              "⏱️  Response Time Stability:",
+              "  Average: " + (.metrics.http_req_duration.values.avg // 0 | tostring) + "ms",
+              "  P50: " + (.metrics.http_req_duration.values."p(50)" // 0 | tostring) + "ms",
+              "  P95: " + (.metrics.http_req_duration.values."p(95)" // 0 | tostring) + "ms",
+              "  P99: " + (.metrics.http_req_duration.values."p(99)" // 0 | tostring) + "ms",
+              "  Max: " + (.metrics.http_req_duration.values.max // 0 | tostring) + "ms",
+              "",
+              "🧠 Memory & Resource Metrics:",
+              if .metrics.system_memory_usage_percent then
+                "  Peak Memory: " + (.metrics.system_memory_usage_percent.values.max // 0 | tostring) + "%"
+              else
+                "  Memory data: Not available"
+              end,
+              if .metrics.system_cpu_usage_percent then
+                "  Peak CPU: " + (.metrics.system_cpu_usage_percent.values.max // 0 | tostring) + "%"
+              else
+                "  CPU data: Not available"
+              end,
+              if .metrics.nodejs_heap_used_mb then
+                "  Peak Heap: " + (.metrics.nodejs_heap_used_mb.values.max // 0 | tostring) + "MB"
+              else
+                "  Heap data: Not available"
+              end
+            ' soak-summary.json
+            
+            # Check for performance degradation over time
+            P95_FINAL=$(jq -r '.metrics.http_req_duration.values."p(95)" // 0' soak-summary.json)
+            ERROR_RATE_FINAL=$(jq -r '.metrics.http_req_failed.values.rate // 0' soak-summary.json)
+            
+            echo ""
+            echo "🎯 Soak Test SLO Assessment:"
+            
+            if (( $(echo "$P95_FINAL <= 12000" | bc -l) )); then
+              echo "  P95 Latency: ✅ STABLE (${P95_FINAL}ms ≤ 12s threshold)"
+            else
+              echo "  P95 Latency: ❌ DEGRADED (${P95_FINAL}ms > 12s threshold)"
+              exit 1
+            fi
+            
+            if (( $(echo "$ERROR_RATE_FINAL <= 0.02" | bc -l) )); then
+              echo "  Error Rate: ✅ STABLE ($(echo "$ERROR_RATE_FINAL * 100" | bc)% ≤ 2% threshold)"
+            else
+              echo "  Error Rate: ❌ DEGRADED ($(echo "$ERROR_RATE_FINAL * 100" | bc)% > 2% threshold)"
+              exit 1
+            fi
+            
+            echo ""
+            echo "✅ Soak test completed successfully - no performance degradation detected"
+          fi
+
+      - name: Upload soak test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: soak-test-results
+          path: marketing/tests/load/k6/results/
+
+  # =============================================
+  # Profile-Enhanced Test
+  # =============================================
+  profile-test:
+    needs: [configure-tests, smoke-test]
+    if: needs.configure-tests.outputs.should-run-profile == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          curl -L https://github.com/grafana/k6/releases/download/v${{ env.K6_VERSION }}/k6-v${{ env.K6_VERSION }}-linux-amd64.tar.gz | tar -xz
+          sudo mv k6-v${{ env.K6_VERSION }}-linux-amd64/k6 /usr/local/bin/
+
+      - name: Run profile-enhanced test
+        env:
+          K6_BASE_URL: https://api-${{ needs.configure-tests.outputs.environment }}.ofm.social
+          K6_API_KEY: ${{ secrets.LOAD_TEST_API_KEY }}
+          K6_TEST_CREATOR_ID: profile-test-creator
+          K6_MAX_VUS: ${{ needs.configure-tests.outputs.max-vus }}
+          K6_TEST_DURATION: ${{ needs.configure-tests.outputs.duration }}
+        run: |
+          cd marketing/tests/load/k6
+          mkdir -p results
+          
+          echo "🔬 Running profile-enhanced load test..."
+          echo "📊 Collecting detailed system metrics during load"
+          
+          k6 run scenarios/profile-enhanced.js \
+            --out json=results/profile-test.json \
+            --summary-export=results/profile-summary.json
+
+      - name: Analyze profile results
+        run: |
+          cd marketing/tests/load/k6/results
+          
+          echo "🔍 Profile-Enhanced Test Analysis:"
+          echo "================================="
+          
+          if [[ -f "profile-summary.json" ]]; then
+            jq -r '
+              "🎯 Performance Metrics:",
+              "  Total Requests: " + (.metrics.http_reqs.values.count // 0 | tostring),
+              "  Error Rate: " + ((.metrics.http_req_failed.values.rate // 0) * 100 | tostring) + "%",
+              "  P95 Latency: " + (.metrics.http_req_duration.values."p(95)" // 0 | tostring) + "ms",
+              "",
+              "📊 System Resource Usage:",
+              if .metrics.system_cpu_usage_percent then
+                "  CPU Usage - Avg: " + (.metrics.system_cpu_usage_percent.values.avg // 0 | tostring) + "%, Max: " + (.metrics.system_cpu_usage_percent.values.max // 0 | tostring) + "%"
+              else
+                "  CPU data: Not collected"
+              end,
+              if .metrics.system_memory_usage_percent then
+                "  Memory Usage - Avg: " + (.metrics.system_memory_usage_percent.values.avg // 0 | tostring) + "%, Max: " + (.metrics.system_memory_usage_percent.values.max // 0 | tostring) + "%"
+              else
+                "  Memory data: Not collected"
+              end,
+              if .metrics.nodejs_heap_used_mb then
+                "  Heap Usage - Avg: " + (.metrics.nodejs_heap_used_mb.values.avg // 0 | tostring) + "MB, Max: " + (.metrics.nodejs_heap_used_mb.values.max // 0 | tostring) + "MB"
+              else
+                "  Heap data: Not collected"
+              end,
+              if .metrics.db_connections_active then
+                "  DB Connections - Avg: " + (.metrics.db_connections_active.values.avg // 0 | tostring) + ", Max: " + (.metrics.db_connections_active.values.max // 0 | tostring)
+              else
+                "  DB connection data: Not collected"
+              end
+            ' profile-summary.json
+          fi
+
+      - name: Upload profile test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-test-results
+          path: marketing/tests/load/k6/results/
+
+  # =============================================
+  # Results Summary & PR Comment
+  # =============================================
+  summarize-results:
+    needs: [configure-tests, smoke-test, load-tests, soak-test, profile-test]
+    if: always() && (success() || failure())
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          path: test-results/
+
+      - name: Generate comprehensive report
+        run: |
+          echo "📊 Load Test Summary Report" > report.md
+          echo "=========================" >> report.md
+          echo "" >> report.md
+          echo "**Test Configuration:**" >> report.md
+          echo "- Test Type: ${{ needs.configure-tests.outputs.test-type }}" >> report.md
+          echo "- Environment: ${{ needs.configure-tests.outputs.environment }}" >> report.md
+          echo "- Max VUs: ${{ needs.configure-tests.outputs.max-vus }}" >> report.md
+          echo "- Duration: ${{ needs.configure-tests.outputs.duration }}" >> report.md
+          echo "" >> report.md
+          
+          # Analyze results from each test type
+          echo "## Test Results" >> report.md
+          echo "" >> report.md
+          
+          # Check for failures
+          OVERALL_STATUS="✅ PASSED"
+          
+          if [[ "${{ needs.smoke-test.result }}" != "success" ]]; then
+            OVERALL_STATUS="❌ FAILED"
+            echo "- 🔴 Smoke Test: FAILED" >> report.md
+          else
+            echo "- ✅ Smoke Test: PASSED" >> report.md
+          fi
+          
+          if [[ "${{ needs.load-tests.result }}" == "failure" ]]; then
+            OVERALL_STATUS="❌ FAILED"
+            echo "- 🔴 Load Tests: FAILED" >> report.md
+          elif [[ "${{ needs.load-tests.result }}" == "success" ]]; then
+            echo "- ✅ Load Tests: PASSED" >> report.md
+          else
+            echo "- ⏭️ Load Tests: SKIPPED" >> report.md
+          fi
+          
+          if [[ "${{ needs.soak-test.result }}" == "failure" ]]; then
+            OVERALL_STATUS="❌ FAILED"
+            echo "- 🔴 Soak Test: FAILED" >> report.md
+          elif [[ "${{ needs.soak-test.result }}" == "success" ]]; then
+            echo "- ✅ Soak Test: PASSED" >> report.md
+          else
+            echo "- ⏭️ Soak Test: SKIPPED" >> report.md
+          fi
+          
+          if [[ "${{ needs.profile-test.result }}" == "failure" ]]; then
+            OVERALL_STATUS="❌ FAILED"
+            echo "- 🔴 Profile Test: FAILED" >> report.md
+          elif [[ "${{ needs.profile-test.result }}" == "success" ]]; then
+            echo "- ✅ Profile Test: PASSED" >> report.md
+          else
+            echo "- ⏭️ Profile Test: SKIPPED" >> report.md
+          fi
+          
+          echo "" >> report.md
+          echo "## Overall Status: $OVERALL_STATUS" >> report.md
+          echo "" >> report.md
+          
+          # Add recommendations
+          echo "## Recommendations" >> report.md
+          echo "" >> report.md
+          if [[ "$OVERALL_STATUS" == "✅ PASSED" ]]; then
+            echo "- All performance thresholds met" >> report.md
+            echo "- System is ready for production deployment" >> report.md
+            echo "- Continue monitoring post-deployment metrics" >> report.md
+          else
+            echo "- ⚠️ Performance issues detected" >> report.md
+            echo "- Review failed test details and system metrics" >> report.md
+            echo "- Consider optimization before deployment" >> report.md
+          fi
+          
+          cat report.md
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('report.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
+
+      - name: Set job status
+        run: |
+          if [[ "${{ needs.smoke-test.result }}" != "success" ]] || \
+             [[ "${{ needs.load-tests.result }}" == "failure" ]] || \
+             [[ "${{ needs.soak-test.result }}" == "failure" ]] || \
+             [[ "${{ needs.profile-test.result }}" == "failure" ]]; then
+            echo "❌ Load tests failed - see results above"
+            exit 1
+          else
+            echo "✅ All load tests passed successfully"
+          fi

@@ -132,15 +132,32 @@ sum(rate(webhook_signature_total{version="canary"}[5m]))
 #### Monitoring Commands
 
 ```bash
-# Real-time SLO monitoring
+# Real-time SLO monitoring using verification script
+cd marketing/scripts/slo
+npx ts-node verify-slo.ts \
+  --service-name ofm-social-os-api-canary \
+  --environment production \
+  --prometheus-url https://prometheus-production.ofm.social \
+  --rollback-command "kubectl argo rollouts abort ofm-social-os-api-rollout -n ofm-production"
+
+# Manual Prometheus queries for quick checks
 kubectl exec -n monitoring deployment/prometheus-server -- \
-  promtool query instant '<SLO_QUERY>'
+  promtool query instant 'histogram_quantile(0.95, sum by(le)(rate(http_request_duration_seconds_bucket{service="ofm-social-os-api-canary", version="canary"}[5m]))) * 1000'
+
+# Check webhook signature verification rate
+kubectl exec -n monitoring deployment/prometheus-server -- \
+  promtool query instant 'sum(rate(webhook_signature_verified_total{version="canary"}[5m])) / sum(rate(webhook_signature_total{version="canary"}[5m]))'
 
 # View Grafana dashboards
 open https://grafana.ofm.social/d/canary/canary-deployment
+open https://grafana.ofm.social/d/k6-load-testing/k6-load-testing
 
 # Check Argo Rollouts status
 kubectl argo rollouts get rollout ofm-social-os-api-rollout -n ofm-production
+
+# Monitor analysis runs for SLO gates
+kubectl get analysisruns -n ofm-production -l app=ofm-social-os
+kubectl describe analysisrun <analysis-run-name> -n ofm-production
 ```
 
 ### Step 4: Handle SLO Breaches

@@ -270,10 +270,113 @@ jobs:
           curl -f -H "X-Canary: always" "${API_URL}/health" || exit 1
 
   # =============================================
+  # Load Test Validation
+  # =============================================
+  validate-performance:
+    needs: [pre-checks, deploy-canary]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          curl -L https://github.com/grafana/k6/releases/download/v0.47.0/k6-v0.47.0-linux-amd64.tar.gz | tar -xz
+          sudo mv k6-v0.47.0-linux-amd64/k6 /usr/local/bin/
+
+      - name: Run canary validation load test
+        env:
+          K6_BASE_URL: https://api-${{ needs.pre-checks.outputs.environment }}.ofm.social
+          K6_API_KEY: ${{ secrets.LOAD_TEST_API_KEY }}
+          K6_TEST_CREATOR_ID: canary-test-creator
+          K6_MAX_VUS: 15
+          K6_TEST_DURATION: 5m
+          K6_CANARY_TESTING: true
+        run: |
+          cd marketing/tests/load/k6
+          mkdir -p results
+          
+          echo "🔍 Running canary validation load test..."
+          echo "  Targeting canary version specifically"
+          echo "  Max VUs: 15 (moderate load)"
+          echo "  Duration: 5 minutes"
+          
+          # Run validation test focusing on canary endpoints
+          k6 run scenarios/publish.js \
+            --out json=results/canary-validation.json \
+            --summary-export=results/canary-summary.json \
+            --quiet
+
+      - name: Validate canary performance
+        run: |
+          cd marketing/tests/load/k6/results
+          
+          echo "📊 Canary Performance Validation"
+          echo "==============================="
+          
+          if [[ -f "canary-summary.json" ]]; then
+            # Extract key metrics
+            P95_LATENCY=$(jq -r '.metrics.http_req_duration.values."p(95)" // 0' canary-summary.json)
+            P99_LATENCY=$(jq -r '.metrics.http_req_duration.values."p(99)" // 0' canary-summary.json)
+            ERROR_RATE=$(jq -r '.metrics.http_req_failed.values.rate // 0' canary-summary.json)
+            TOTAL_REQUESTS=$(jq -r '.metrics.http_reqs.values.count // 0' canary-summary.json)
+            
+            echo "📈 Canary Metrics:"
+            echo "  Total Requests: $TOTAL_REQUESTS"
+            echo "  Error Rate: $(echo "$ERROR_RATE * 100" | bc)%"
+            echo "  P95 Latency: ${P95_LATENCY}ms"
+            echo "  P99 Latency: ${P99_LATENCY}ms"
+            
+            # Validate against SLO thresholds
+            VALIDATION_FAILED=false
+            
+            if (( $(echo "$P95_LATENCY > 10000" | bc -l) )); then
+              echo "❌ Canary P95 latency exceeds SLO: ${P95_LATENCY}ms > 10s"
+              VALIDATION_FAILED=true
+            else
+              echo "✅ Canary P95 latency within SLO: ${P95_LATENCY}ms ≤ 10s"
+            fi
+            
+            if (( $(echo "$P99_LATENCY > 15000" | bc -l) )); then
+              echo "❌ Canary P99 latency exceeds SLO: ${P99_LATENCY}ms > 15s"
+              VALIDATION_FAILED=true
+            else
+              echo "✅ Canary P99 latency within SLO: ${P99_LATENCY}ms ≤ 15s"
+            fi
+            
+            if (( $(echo "$ERROR_RATE > 0.01" | bc -l) )); then
+              echo "❌ Canary error rate exceeds SLO: $(echo "$ERROR_RATE * 100" | bc)% > 1%"
+              VALIDATION_FAILED=true
+            else
+              echo "✅ Canary error rate within SLO: $(echo "$ERROR_RATE * 100" | bc)% ≤ 1%"
+            fi
+            
+            if [[ "$VALIDATION_FAILED" == "true" ]]; then
+              echo "💥 Canary performance validation FAILED"
+              echo "Automatic rollback will be triggered"
+              exit 1
+            else
+              echo "🎉 Canary performance validation PASSED"
+              echo "Proceeding to SLO monitoring phase"
+            fi
+          else
+            echo "❌ Canary test results not found"
+            exit 1
+          fi
+
+      - name: Upload canary test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: canary-validation-results
+          path: marketing/tests/load/k6/results/
+
+  # =============================================
   # SLO Monitoring & Gates
   # =============================================
   monitor-slos:
-    needs: [pre-checks, deploy-canary]
+    needs: [pre-checks, deploy-canary, validate-performance]
     runs-on: ubuntu-latest
     if: success()
     steps:
@@ -356,7 +459,7 @@ jobs:
   # Automatic Rollback
   # =============================================
   rollback:
-    needs: [pre-checks, deploy-canary, monitor-slos]
+    needs: [pre-checks, deploy-canary, validate-performance, monitor-slos]
     runs-on: ubuntu-latest
     if: failure()
     steps:
@@ -418,7 +521,7 @@ jobs:
   # Success Notification & Promotion
   # =============================================
   notify-success:
-    needs: [pre-checks, deploy-canary, monitor-slos]
+    needs: [pre-checks, deploy-canary, validate-performance, monitor-slos]
     runs-on: ubuntu-latest
     if: success()
     steps:

@@ -1,0 +1,658 @@
+name: Disaster Recovery - Monthly Drill
+
+on:
+  # Monthly scheduled DR drill (first Saturday of each month at 10:00 UTC)
+  schedule:
+    - cron: '0 10 1-7 * 6'  # First Saturday of month at 10:00 UTC
+  
+  # Manual trigger for on-demand DR testing
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Source environment for DR test'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      dr_environment:
+        description: 'DR test environment'
+        required: true
+        default: 'dr-sandbox'
+        type: string
+      pitr_target:
+        description: 'Point-in-time recovery target (YYYY-MM-DD HH:MM:SS)'
+        required: false
+        type: string
+      full_drill:
+        description: 'Run full DR drill (includes application testing)'
+        required: true
+        default: true
+        type: boolean
+      rto_target:
+        description: 'RTO target in minutes'
+        required: false
+        default: '30'
+        type: string
+      rpo_target:
+        description: 'RPO target in minutes'
+        required: false
+        default: '15'
+        type: string
+
+env:
+  DR_ENVIRONMENT: ${{ github.event.inputs.dr_environment || 'dr-sandbox' }}
+  SOURCE_ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
+  S3_BACKUP_BUCKET: 'ofm-db-backups'
+  RESULTS_BUCKET: 'ofm-dr-results'
+
+concurrency:
+  group: dr-drill-${{ github.event.inputs.dr_environment || 'dr-sandbox' }}
+  cancel-in-progress: false  # Don't cancel DR drills
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+jobs:
+  # =============================================
+  # Pre-DR Preparation
+  # =============================================
+  prepare-dr-drill:
+    runs-on: ubuntu-latest
+    outputs:
+      drill-id: ${{ steps.setup.outputs.drill-id }}
+      source-healthy: ${{ steps.health.outputs.healthy }}
+      backup-available: ${{ steps.backup.outputs.available }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup DR drill
+        id: setup
+        run: |
+          DRILL_ID="dr-$(date +%Y%m%d-%H%M%S)"
+          echo "drill-id=$DRILL_ID" >> $GITHUB_OUTPUT
+          echo "🎯 DR Drill ID: $DRILL_ID"
+          
+          # Create results directory
+          mkdir -p dr-results
+          
+          # Log drill start
+          echo "DR Drill Started: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" > dr-results/drill-${DRILL_ID}.log
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: Check source environment health
+        id: health
+        run: |
+          SOURCE="${{ env.SOURCE_ENVIRONMENT }}"
+          NAMESPACE="ofm-${SOURCE}"
+          
+          echo "🔍 Checking source environment health: $SOURCE"
+          
+          # Check pods
+          READY_PODS=$(kubectl get pods -n "$NAMESPACE" --field-selector=status.phase=Running --no-headers | wc -l)
+          TOTAL_PODS=$(kubectl get pods -n "$NAMESPACE" --no-headers | wc -l)
+          
+          echo "Pods: $READY_PODS/$TOTAL_PODS ready"
+          
+          # Check API
+          API_URL="https://api-${SOURCE}.ofm.social"
+          
+          if curl -f --max-time 30 "$API_URL/health" > /dev/null; then
+            echo "✅ Source API responding"
+            API_HEALTHY=true
+          else
+            echo "❌ Source API not responding"
+            API_HEALTHY=false
+          fi
+          
+          # Overall health
+          if [[ $READY_PODS -gt 0 ]] && [[ $API_HEALTHY == "true" ]]; then
+            echo "healthy=true" >> $GITHUB_OUTPUT
+            echo "✅ Source environment is healthy"
+          else
+            echo "healthy=false" >> $GITHUB_OUTPUT
+            echo "❌ Source environment has issues"
+          fi
+
+      - name: Verify backup availability
+        id: backup
+        run: |
+          echo "📊 Checking backup availability..."
+          
+          # List recent backups
+          RECENT_BACKUPS=$(aws s3api list-objects-v2 \
+            --bucket "${{ env.S3_BACKUP_BUCKET }}" \
+            --prefix "backup/ofm-social-os/" \
+            --query 'Contents[?LastModified>=`2024-01-01`].{Key: Key, LastModified: LastModified}' \
+            --output json)
+          
+          BACKUP_COUNT=$(echo "$RECENT_BACKUPS" | jq '. | length')
+          
+          if [[ $BACKUP_COUNT -gt 0 ]]; then
+            LATEST_BACKUP=$(echo "$RECENT_BACKUPS" | jq -r 'sort_by(.LastModified) | last | .LastModified')
+            echo "✅ Backups available - Latest: $LATEST_BACKUP"
+            echo "available=true" >> $GITHUB_OUTPUT
+            
+            # Calculate RPO
+            BACKUP_EPOCH=$(date -d "$LATEST_BACKUP" +%s)
+            CURRENT_EPOCH=$(date +%s)
+            RPO_MINUTES=$(( (CURRENT_EPOCH - BACKUP_EPOCH) / 60 ))
+            
+            echo "Current RPO: ${RPO_MINUTES} minutes"
+          else
+            echo "❌ No recent backups found"
+            echo "available=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pre-drill notification
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `🔄 Monthly DR Drill - ${new Date().toLocaleDateString()}`;
+            const body = `
+              ## Disaster Recovery Drill Starting
+              
+              **Drill ID:** \`${{ steps.setup.outputs.drill-id }}\`
+              **Source Environment:** ${{ env.SOURCE_ENVIRONMENT }}
+              **DR Environment:** ${{ env.DR_ENVIRONMENT }}
+              **Scheduled:** ${new Date().toISOString()}
+              
+              ### Pre-Drill Status
+              - Source Environment: ${{ steps.health.outputs.healthy == 'true' && '✅ Healthy' || '❌ Issues Detected' }}
+              - Backup Availability: ${{ steps.backup.outputs.available == 'true' && '✅ Available' || '❌ No Recent Backups' }}
+              
+              ### Objectives
+              - **RTO Target:** ${{ github.event.inputs.rto_target || '30' }} minutes
+              - **RPO Target:** ${{ github.event.inputs.rpo_target || '15' }} minutes
+              - **Full Drill:** ${{ github.event.inputs.full_drill || 'true' }}
+              
+              ---
+              *This is an automated DR drill. Progress will be updated below.*
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['disaster-recovery', 'monthly-drill', 'operations']
+            });
+
+  # =============================================
+  # Database Recovery Test
+  # =============================================
+  database-recovery:
+    needs: prepare-dr-drill
+    if: needs.prepare-dr-drill.outputs.source-healthy == 'true' && needs.prepare-dr-drill.outputs.backup-available == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      rto-minutes: ${{ steps.restore.outputs.rto-minutes }}
+      rpo-minutes: ${{ steps.restore.outputs.rpo-minutes }}
+      integrity-passed: ${{ steps.restore.outputs.integrity-passed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client bc jq curl
+
+      - name: Run database recovery test
+        id: restore
+        env:
+          PITR_TARGET: ${{ github.event.inputs.pitr_target }}
+          RTO_TARGET: ${{ github.event.inputs.rto_target || '30' }}
+          RPO_TARGET: ${{ github.event.inputs.rpo_target || '15' }}
+          AUTO_CLEANUP: 'false'  # Keep for investigation
+        run: |
+          cd marketing/dr/scripts
+          
+          echo "🔄 Starting database recovery test..."
+          echo "Source: ${{ env.SOURCE_ENVIRONMENT }}"
+          echo "Target: ${{ env.DR_ENVIRONMENT }}"
+          echo "PITR Target: ${PITR_TARGET:-Latest}"
+          
+          # Run DR restore script
+          ./dr-restore-sandbox.sh \
+            --environment "${{ env.DR_ENVIRONMENT }}" \
+            --source "${{ env.SOURCE_ENVIRONMENT }}" \
+            --s3-bucket "${{ env.S3_BACKUP_BUCKET }}" \
+            --aws-region "${{ secrets.AWS_REGION }}" \
+            --rto-target "$RTO_TARGET" \
+            --rpo-target "$RPO_TARGET" \
+            --results-dir "./dr-results" \
+            --no-cleanup \
+            $(if [[ -n "$PITR_TARGET" ]]; then echo "--pitr-target '$PITR_TARGET'"; fi)
+          
+          # Extract results from latest report
+          LATEST_REPORT=$(find ./dr-results -name "dr_report_*.json" -type f | sort | tail -n1)
+          
+          if [[ -n "$LATEST_REPORT" ]] && [[ -f "$LATEST_REPORT" ]]; then
+            RTO_MINUTES=$(jq -r '.results.rto_actual_minutes' "$LATEST_REPORT")
+            RPO_MINUTES=$(jq -r '.results.rpo_actual_minutes' "$LATEST_REPORT")
+            INTEGRITY_PASSED=$(jq -r '.results.data_integrity_passed' "$LATEST_REPORT")
+            
+            echo "rto-minutes=$RTO_MINUTES" >> $GITHUB_OUTPUT
+            echo "rpo-minutes=$RPO_MINUTES" >> $GITHUB_OUTPUT
+            echo "integrity-passed=$INTEGRITY_PASSED" >> $GITHUB_OUTPUT
+            
+            echo "✅ Database recovery completed"
+            echo "RTO: ${RTO_MINUTES} minutes"
+            echo "RPO: ${RPO_MINUTES} minutes"
+            echo "Integrity: $INTEGRITY_PASSED"
+          else
+            echo "❌ No DR report found"
+            exit 1
+          fi
+
+      - name: Upload DR results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dr-database-results-${{ needs.prepare-dr-drill.outputs.drill-id }}
+          path: marketing/dr/scripts/dr-results/
+          retention-days: 90
+
+  # =============================================
+  # Application Recovery Test
+  # =============================================
+  application-recovery:
+    needs: [prepare-dr-drill, database-recovery]
+    if: github.event.inputs.full_drill == 'true' && needs.database-recovery.outputs.integrity-passed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      app-recovery-success: ${{ steps.app-test.outputs.success }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: Deploy application to DR environment
+        run: |
+          echo "🚀 Deploying application to DR environment..."
+          
+          DR_NAMESPACE="ofm-${{ env.DR_ENVIRONMENT }}"
+          
+          # Create namespace if not exists
+          kubectl create namespace "$DR_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          
+          # Deploy minimal application configuration for testing
+          cat << EOF | kubectl apply -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: ofm-social-os-api-dr
+            namespace: $DR_NAMESPACE
+            labels:
+              app: ofm-social-os
+              component: api
+              environment: dr-test
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: ofm-social-os
+                component: api
+            template:
+              metadata:
+                labels:
+                  app: ofm-social-os
+                  component: api
+              spec:
+                containers:
+                - name: api
+                  image: ghcr.io/${{ github.repository }}/api:latest
+                  ports:
+                  - containerPort: 3000
+                  env:
+                  - name: NODE_ENV
+                    value: "dr-test"
+                  - name: DATABASE_URL
+                    value: "postgresql://postgres:dr-sandbox-password@postgres-dr:5432/ofm_social_os"
+                  - name: REDIS_URL
+                    value: "redis://redis-dr:6379"
+                  livenessProbe:
+                    httpGet:
+                      path: /health
+                      port: 3000
+                    initialDelaySeconds: 30
+                    periodSeconds: 10
+                  readinessProbe:
+                    httpGet:
+                      path: /ready
+                      port: 3000
+                    initialDelaySeconds: 5
+                    periodSeconds: 5
+                  resources:
+                    requests:
+                      memory: "256Mi"
+                      cpu: "250m"
+                    limits:
+                      memory: "1Gi"
+                      cpu: "500m"
+          
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: ofm-social-os-api-dr
+            namespace: $DR_NAMESPACE
+          spec:
+            selector:
+              app: ofm-social-os
+              component: api
+            ports:
+            - port: 80
+              targetPort: 3000
+            type: ClusterIP
+          EOF
+          
+          # Wait for deployment
+          kubectl rollout status deployment/ofm-social-os-api-dr -n "$DR_NAMESPACE" --timeout=300s
+
+      - name: Test application functionality
+        id: app-test
+        run: |
+          echo "🧪 Testing application functionality in DR environment..."
+          
+          DR_NAMESPACE="ofm-${{ env.DR_ENVIRONMENT }}"
+          
+          # Port forward to access the application
+          kubectl port-forward -n "$DR_NAMESPACE" service/ofm-social-os-api-dr 8080:80 &
+          PF_PID=$!
+          
+          # Wait for port forward to be ready
+          sleep 10
+          
+          # Test health endpoint
+          if curl -f --max-time 30 http://localhost:8080/health > /dev/null; then
+            echo "✅ Health endpoint responding"
+            HEALTH_OK=true
+          else
+            echo "❌ Health endpoint not responding"
+            HEALTH_OK=false
+          fi
+          
+          # Test database connectivity through app
+          if curl -f --max-time 30 http://localhost:8080/api/health/database > /dev/null 2>&1; then
+            echo "✅ Database connectivity through app OK"
+            DB_OK=true
+          else
+            echo "⚠️ Database connectivity test not available or failed"
+            DB_OK=true  # Don't fail DR for missing endpoint
+          fi
+          
+          # Test basic API functionality
+          if curl -f --max-time 30 -H "Content-Type: application/json" http://localhost:8080/api/creators > /dev/null 2>&1; then
+            echo "✅ Basic API functionality OK"
+            API_OK=true
+          else
+            echo "⚠️ Basic API test not available or failed"
+            API_OK=true  # Don't fail DR for missing endpoint
+          fi
+          
+          # Clean up port forward
+          kill $PF_PID 2>/dev/null || true
+          
+          # Overall success
+          if [[ $HEALTH_OK == "true" ]]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+            echo "✅ Application recovery test passed"
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "❌ Application recovery test failed"
+          fi
+
+      - name: Collect application logs
+        if: always()
+        run: |
+          DR_NAMESPACE="ofm-${{ env.DR_ENVIRONMENT }}"
+          
+          echo "📋 Collecting application logs for analysis..."
+          
+          mkdir -p app-recovery-logs
+          
+          # Get pod logs
+          kubectl logs -n "$DR_NAMESPACE" -l app=ofm-social-os --tail=100 > app-recovery-logs/app-logs.txt || true
+          
+          # Get pod status
+          kubectl describe pods -n "$DR_NAMESPACE" -l app=ofm-social-os > app-recovery-logs/pod-status.txt || true
+          
+          # Get events
+          kubectl get events -n "$DR_NAMESPACE" --sort-by='.metadata.creationTimestamp' > app-recovery-logs/events.txt || true
+
+      - name: Upload application recovery results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dr-application-results-${{ needs.prepare-dr-drill.outputs.drill-id }}
+          path: app-recovery-logs/
+          retention-days: 90
+
+  # =============================================
+  # Cleanup DR Environment
+  # =============================================
+  cleanup-dr:
+    needs: [prepare-dr-drill, database-recovery, application-recovery]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: Cleanup DR resources
+        run: |
+          DR_NAMESPACE="ofm-${{ env.DR_ENVIRONMENT }}"
+          
+          echo "🧹 Cleaning up DR test resources..."
+          
+          # Delete application resources
+          kubectl delete deployment ofm-social-os-api-dr -n "$DR_NAMESPACE" --wait=false 2>/dev/null || true
+          kubectl delete service ofm-social-os-api-dr -n "$DR_NAMESPACE" --wait=false 2>/dev/null || true
+          
+          # Delete database resources
+          kubectl delete deployment postgres-dr -n "$DR_NAMESPACE" --wait=false 2>/dev/null || true
+          kubectl delete service postgres-dr -n "$DR_NAMESPACE" --wait=false 2>/dev/null || true
+          kubectl delete pvc postgres-dr-pvc -n "$DR_NAMESPACE" --wait=false 2>/dev/null || true
+          kubectl delete configmap postgres-dr-config pgbackrest-dr-config -n "$DR_NAMESPACE" --wait=false 2>/dev/null || true
+          kubectl delete secret postgres-dr-secret -n "$DR_NAMESPACE" --wait=false 2>/dev/null || true
+          kubectl delete pod dr-connectivity-test -n "$DR_NAMESPACE" --wait=false 2>/dev/null || true
+          
+          # Delete test pods
+          kubectl delete pods -n "$DR_NAMESPACE" -l purpose=dr-testing --wait=false 2>/dev/null || true
+          
+          echo "✅ DR cleanup initiated"
+
+  # =============================================
+  # Generate DR Report
+  # =============================================
+  generate-dr-report:
+    needs: [prepare-dr-drill, database-recovery, application-recovery, cleanup-dr]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate comprehensive DR report
+        run: |
+          echo "# 🔄 Monthly DR Drill Report" > dr-report.md
+          echo "**Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> dr-report.md
+          echo "**Drill ID:** ${{ needs.prepare-dr-drill.outputs.drill-id }}" >> dr-report.md
+          echo "" >> dr-report.md
+          
+          # Executive Summary
+          echo "## Executive Summary" >> dr-report.md
+          
+          OVERALL_SUCCESS="true"
+          
+          if [[ "${{ needs.prepare-dr-drill.result }}" != "success" ]]; then
+            OVERALL_SUCCESS="false"
+            echo "❌ **Overall Status: FAILED** - Pre-drill checks failed" >> dr-report.md
+          elif [[ "${{ needs.database-recovery.result }}" != "success" ]]; then
+            OVERALL_SUCCESS="false"
+            echo "❌ **Overall Status: FAILED** - Database recovery failed" >> dr-report.md
+          elif [[ "${{ github.event.inputs.full_drill }}" == "true" ]] && [[ "${{ needs.application-recovery.result }}" != "success" ]]; then
+            OVERALL_SUCCESS="false"
+            echo "⚠️ **Overall Status: PARTIAL** - Database recovered but application issues" >> dr-report.md
+          else
+            echo "✅ **Overall Status: SUCCESS** - All recovery objectives met" >> dr-report.md
+          fi
+          echo "" >> dr-report.md
+          
+          # Detailed Results
+          echo "## Detailed Results" >> dr-report.md
+          echo "" >> dr-report.md
+          
+          # Database Recovery
+          echo "### Database Recovery" >> dr-report.md
+          if [[ "${{ needs.database-recovery.result }}" == "success" ]]; then
+            RTO="${{ needs.database-recovery.outputs.rto-minutes }}"
+            RPO="${{ needs.database-recovery.outputs.rpo-minutes }}"
+            RTO_TARGET="${{ github.event.inputs.rto_target || '30' }}"
+            RPO_TARGET="${{ github.event.inputs.rpo_target || '15' }}"
+            
+            echo "- **RTO:** ${RTO} minutes (target: ${RTO_TARGET} minutes) - $(if [[ ${RTO:-999} -le ${RTO_TARGET} ]]; then echo "✅ PASS"; else echo "❌ FAIL"; fi)" >> dr-report.md
+            echo "- **RPO:** ${RPO} minutes (target: ${RPO_TARGET} minutes) - $(if [[ ${RPO:-999} -le ${RPO_TARGET} ]]; then echo "✅ PASS"; else echo "❌ FAIL"; fi)" >> dr-report.md
+            echo "- **Data Integrity:** ${{ needs.database-recovery.outputs.integrity-passed == 'true' && '✅ PASS' || '❌ FAIL' }}" >> dr-report.md
+          else
+            echo "- **Status:** ❌ FAILED - Database recovery did not complete" >> dr-report.md
+          fi
+          echo "" >> dr-report.md
+          
+          # Application Recovery
+          if [[ "${{ github.event.inputs.full_drill }}" == "true" ]]; then
+            echo "### Application Recovery" >> dr-report.md
+            if [[ "${{ needs.application-recovery.result }}" == "success" ]]; then
+              echo "- **Status:** ✅ PASS - Application deployed and responding" >> dr-report.md
+              echo "- **Functionality:** ${{ needs.application-recovery.outputs.app-recovery-success == 'true' && '✅ PASS' || '❌ FAIL' }}" >> dr-report.md
+            else
+              echo "- **Status:** ❌ FAIL - Application recovery issues" >> dr-report.md
+            fi
+            echo "" >> dr-report.md
+          fi
+          
+          # Recommendations
+          echo "## Recommendations" >> dr-report.md
+          echo "" >> dr-report.md
+          
+          if [[ "$OVERALL_SUCCESS" == "true" ]]; then
+            echo "- ✅ DR capabilities are meeting objectives" >> dr-report.md
+            echo "- Continue monthly DR drills" >> dr-report.md
+            echo "- Consider reducing RTO/RPO targets for improvement" >> dr-report.md
+          else
+            echo "- ⚠️ DR capabilities need improvement" >> dr-report.md
+            echo "- Review failed components and implement fixes" >> dr-report.md
+            echo "- Consider more frequent DR testing" >> dr-report.md
+          fi
+          
+          echo "- Update disaster recovery runbooks based on findings" >> dr-report.md
+          echo "- Train operations team on any new procedures discovered" >> dr-report.md
+          echo "- Schedule follow-up drill in 30 days if issues found" >> dr-report.md
+          
+          echo "" >> dr-report.md
+          echo "## Next Steps" >> dr-report.md
+          echo "1. Review detailed logs and artifacts" >> dr-report.md
+          echo "2. Update DR documentation" >> dr-report.md
+          echo "3. Address any identified issues" >> dr-report.md
+          echo "4. Schedule next monthly drill" >> dr-report.md
+          
+          cat dr-report.md
+
+      - name: Update DR drill issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('dr-report.md', 'utf8');
+            
+            // Find the DR drill issue (most recent one with the right labels)
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'monthly-drill,disaster-recovery',
+              state: 'open',
+              sort: 'created',
+              direction: 'desc',
+              per_page: 1
+            });
+            
+            if (issues.data.length > 0) {
+              const issue = issues.data[0];
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `## 📊 DR Drill Complete\n\n${report}\n\n---\n*Drill completed at: ${new Date().toISOString()}*`
+              });
+              
+              // Close the issue
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed'
+              });
+            }
+
+      - name: Archive DR results to S3
+        if: always()
+        run: |
+          DRILL_ID="${{ needs.prepare-dr-drill.outputs.drill-id }}"
+          
+          # Create archive
+          tar -czf "dr-drill-${DRILL_ID}.tar.gz" dr-report.md
+          
+          # Upload to S3
+          aws s3 cp "dr-drill-${DRILL_ID}.tar.gz" "s3://${{ env.RESULTS_BUCKET }}/dr-drills/" || true
+          
+          echo "📦 DR drill results archived to S3"
+
+      - name: Set workflow status
+        run: |
+          if [[ "${{ needs.prepare-dr-drill.result }}" == "success" ]] && \
+             [[ "${{ needs.database-recovery.result }}" == "success" ]] && \
+             ([[ "${{ github.event.inputs.full_drill }}" != "true" ]] || [[ "${{ needs.application-recovery.result }}" == "success" ]]); then
+            echo "✅ Monthly DR drill completed successfully"
+            exit 0
+          else
+            echo "❌ Monthly DR drill completed with issues - review report"
+            exit 1
+          fi
