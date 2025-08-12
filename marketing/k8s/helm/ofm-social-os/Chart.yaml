@@ -1,0 +1,35 @@
+apiVersion: v2
+name: ofm-social-os
+description: Multi-platform content marketing system with AI agents for Instagram, TikTok, X, and Reddit
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - social-media
+  - marketing
+  - ai
+  - temporal
+  - canary-deployment
+home: https://github.com/chrlshc/ofm-social-os
+sources:
+  - https://github.com/chrlshc/ofm-social-os
+maintainers:
+  - name: OFM Team
+    email: ops@ofm.social
+dependencies:
+  - name: postgresql
+    version: "12.1.9"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: redis
+    version: "17.3.17"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+  - name: prometheus
+    version: "19.0.2"
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: prometheus.enabled
+  - name: grafana
+    version: "6.48.2"
+    repository: https://grafana.github.io/helm-charts
+    condition: grafana.enabled

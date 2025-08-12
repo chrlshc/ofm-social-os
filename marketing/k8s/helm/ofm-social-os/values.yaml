@@ -1,0 +1,397 @@
+# Default values for ofm-social-os
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global settings
+global:
+  environment: production
+  region: us-east-1
+  imageRegistry: ""
+  imagePullSecrets: []
+
+# Canary deployment configuration
+canary:
+  enabled: true
+  weight: 10 # 10% traffic to canary
+  duration: 48h # Duration before auto-promotion
+  autoPromote: true
+  autoRollback: true
+  # SLO thresholds for canary gates
+  analysis:
+    interval: 5m
+    threshold: 5 # Number of failed checks before rollback
+    successCondition: "result[0] >= 0.95" # 95% success rate
+    metrics:
+      - name: publish-success-rate
+        query: |
+          sum(rate(publish_requests_total{status!~"5..",version="canary"}[5m])) / 
+          sum(rate(publish_requests_total{version="canary"}[5m]))
+      - name: publish-latency-p95
+        query: |
+          histogram_quantile(0.95, sum by(le)(rate(publish_latency_ms_bucket{version="canary"}[5m])))
+        successCondition: "result[0] < 10000" # p95 < 10s
+      - name: webhook-signature-rate
+        query: |
+          sum(rate(webhook_signature_verified_total{version="canary"}[5m])) / 
+          sum(rate(webhook_signature_total{version="canary"}[5m]))
+        successCondition: "result[0] == 1.0" # 100% signature verification
+
+# Feature flags configuration
+featureFlags:
+  enabled: true
+  platforms:
+    instagram:
+      enabled: true
+      canaryPercentage: 10
+    tiktok:
+      enabled: true
+      canaryPercentage: 10
+    x:
+      enabled: false # Disabled by default
+      canaryPercentage: 0
+    reddit:
+      enabled: true
+      canaryPercentage: 10
+  features:
+    whisperSubtitles:
+      enabled: true
+      canaryPercentage: 10
+    multiAccountScaling:
+      enabled: true
+      canaryPercentage: 10
+    gdprCompliance:
+      enabled: true
+      canaryPercentage: 100 # Always enabled for compliance
+
+# API deployment
+api:
+  name: ofm-api
+  replicaCount: 3
+  canaryReplicaCount: 1
+  
+  image:
+    repository: ofm-social-os/api
+    pullPolicy: IfNotPresent
+    tag: ""
+  
+  service:
+    type: ClusterIP
+    port: 3000
+    targetPort: 3000
+  
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/rate-limit: "1000"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - host: api.ofm.social
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: ofm-api-tls
+        hosts:
+          - api.ofm.social
+  
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 3000
+    initialDelaySeconds: 5
+    periodSeconds: 5
+
+# Temporal workers
+temporal:
+  workers:
+    publish:
+      replicaCount: 5
+      canaryReplicaCount: 1
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+        requests:
+          cpu: 250m
+          memory: 512Mi
+    
+    media:
+      replicaCount: 3
+      canaryReplicaCount: 1
+      resources:
+        limits:
+          cpu: 4000m
+          memory: 8Gi
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+    
+    webhook:
+      replicaCount: 2
+      canaryReplicaCount: 1
+      resources:
+        limits:
+          cpu: 500m
+          memory: 1Gi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+
+# PostgreSQL configuration
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "changeme"
+    database: ofm_social_os
+  primary:
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: gp3
+    resources:
+      limits:
+        cpu: 4000m
+        memory: 8Gi
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+    nodeSelector:
+      workload: database
+    tolerations:
+      - key: database
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+
+# Redis configuration
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "changeme"
+  master:
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: gp3
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 250m
+        memory: 512Mi
+
+# Prometheus configuration
+prometheus:
+  enabled: true
+  alertmanager:
+    enabled: true
+    config:
+      global:
+        resolve_timeout: 5m
+      route:
+        group_by: ['alertname', 'cluster', 'service']
+        group_wait: 10s
+        group_interval: 10s
+        repeat_interval: 12h
+        receiver: 'default'
+        routes:
+          - match:
+              severity: critical
+            receiver: pagerduty
+          - match:
+              severity: warning
+            receiver: slack
+      receivers:
+        - name: 'default'
+          slack_configs:
+            - api_url: "${SLACK_WEBHOOK_URL}"
+              channel: '#alerts'
+        - name: 'pagerduty'
+          pagerduty_configs:
+            - service_key: "${PAGERDUTY_SERVICE_KEY}"
+        - name: 'slack'
+          slack_configs:
+            - api_url: "${SLACK_WEBHOOK_URL}"
+              channel: '#alerts-warning'
+
+# Grafana configuration
+grafana:
+  enabled: true
+  adminPassword: "changeme"
+  persistence:
+    enabled: true
+    size: 10Gi
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-server
+          access: proxy
+          isDefault: true
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          updateIntervalSeconds: 10
+          options:
+            path: /var/lib/grafana/dashboards/default
+  dashboardsConfigMaps:
+    default: ofm-grafana-dashboards
+
+# Environment configuration
+env:
+  # Database
+  DATABASE_URL: "postgresql://postgres:changeme@ofm-postgresql:5432/ofm_social_os"
+  # Redis
+  REDIS_URL: "redis://:changeme@ofm-redis-master:6379"
+  # Temporal
+  TEMPORAL_ADDRESS: "temporal-frontend:7233"
+  TEMPORAL_NAMESPACE: "default"
+  # S3
+  S3_MEDIA_BUCKET: "ofm-media-prod"
+  S3_REGION: "us-east-1"
+  # Monitoring
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+  PROMETHEUS_PUSHGATEWAY: "http://prometheus-pushgateway:9091"
+
+# Secrets (should be provided via sealed-secrets or external-secrets)
+secrets:
+  # Platform API keys
+  INSTAGRAM_CLIENT_ID: ""
+  INSTAGRAM_CLIENT_SECRET: ""
+  TIKTOK_CLIENT_ID: ""
+  TIKTOK_CLIENT_SECRET: ""
+  X_API_KEY: ""
+  X_API_SECRET: ""
+  REDDIT_CLIENT_ID: ""
+  REDDIT_CLIENT_SECRET: ""
+  # LLM keys
+  OPENAI_API_KEY: ""
+  ANTHROPIC_API_KEY: ""
+  # AWS
+  AWS_ACCESS_KEY_ID: ""
+  AWS_SECRET_ACCESS_KEY: ""
+  # Monitoring
+  SLACK_WEBHOOK_URL: ""
+  PAGERDUTY_SERVICE_KEY: ""
+
+# Service mesh configuration (optional)
+serviceMesh:
+  enabled: false
+  provider: istio # or linkerd
+  mtls:
+    enabled: false
+    mode: STRICT
+
+# Network policies
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5432 # PostgreSQL
+        - protocol: TCP
+          port: 6379 # Redis
+        - protocol: TCP
+          port: 443  # HTTPS for external APIs
+
+# Pod disruption budgets
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+  maxUnavailable: 1
+
+# Priority classes
+priorityClassName: high-priority
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+# Volume mounts for temp directories
+volumeMounts:
+  - name: tmp
+    mountPath: /tmp
+  - name: cache
+    mountPath: /app/.cache
+
+volumes:
+  - name: tmp
+    emptyDir: {}
+  - name: cache
+    emptyDir: {}
+
+# Annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "3000"
+  prometheus.io/path: "/metrics"
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity rules
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - ofm-api
+          topologyKey: kubernetes.io/hostname

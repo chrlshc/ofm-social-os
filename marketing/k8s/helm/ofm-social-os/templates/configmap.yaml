@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ofm-social-os.fullname" . }}-config
+  labels:
+    {{- include "ofm-social-os.labels" . | nindent 4 }}
+data:
+  # Application configuration
+  NODE_ENV: {{ .Values.global.environment | quote }}
+  LOG_LEVEL: {{ .Values.logLevel | default "info" | quote }}
+  
+  # Database configuration
+  {{- if .Values.postgresql.enabled }}
+  DATABASE_URL: {{ include "ofm-social-os.databaseUrl" . | quote }}
+  {{- else }}
+  DATABASE_URL: {{ .Values.env.DATABASE_URL | quote }}
+  {{- end }}
+  
+  # Redis configuration
+  {{- if .Values.redis.enabled }}
+  REDIS_URL: {{ include "ofm-social-os.redisUrl" . | quote }}
+  {{- else }}
+  REDIS_URL: {{ .Values.env.REDIS_URL | quote }}
+  {{- end }}
+  
+  # Temporal configuration
+  TEMPORAL_ADDRESS: {{ .Values.env.TEMPORAL_ADDRESS | default "temporal-frontend:7233" | quote }}
+  TEMPORAL_NAMESPACE: {{ .Values.env.TEMPORAL_NAMESPACE | default "default" | quote }}
+  
+  # S3 configuration
+  S3_MEDIA_BUCKET: {{ .Values.env.S3_MEDIA_BUCKET | quote }}
+  S3_REGION: {{ .Values.env.S3_REGION | default .Values.global.region | quote }}
+  
+  # Monitoring configuration
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.env.OTEL_EXPORTER_OTLP_ENDPOINT | default "http://otel-collector:4317" | quote }}
+  PROMETHEUS_PUSHGATEWAY: {{ .Values.env.PROMETHEUS_PUSHGATEWAY | default "http://prometheus-pushgateway:9091" | quote }}
+  
+  # Feature flags configuration
+  FEATURE_FLAGS: {{ include "ofm-social-os.featureFlags" . | quote }}
+  
+  # SLO configuration
+  SLO_CHECK_INTERVAL: {{ .Values.slo.checkInterval | default "5m" | quote }}
+  SLO_ALERT_COOLDOWN: {{ .Values.slo.alertCooldown | default "15m" | quote }}
+  
+  # Rate limiting configuration
+  RATE_LIMIT_WINDOW: {{ .Values.rateLimit.windowMs | default "900000" | quote }}
+  RATE_LIMIT_MAX_REQUESTS: {{ .Values.rateLimit.maxRequests | default "1000" | quote }}
+  
+  # Canary configuration
+  CANARY_ENABLED: {{ .Values.canary.enabled | quote }}
+  CANARY_WEIGHT: {{ .Values.canary.weight | quote }}
+  
+  # Security configuration
+  CORS_ORIGINS: {{ .Values.cors.origins | default "https://app.ofm.social" | quote }}
+  CSP_ENABLED: {{ .Values.security.csp.enabled | default "true" | quote }}
+  
+  # Backup configuration
+  BACKUP_RETENTION_DAYS: {{ .Values.backup.retentionDays | default "90" | quote }}
+  BACKUP_SCHEDULE_FULL: {{ .Values.backup.schedule.full | default "0 2 * * 0" | quote }}
+  BACKUP_SCHEDULE_DIFF: {{ .Values.backup.schedule.diff | default "0 2 * * 1-6" | quote }}
+  BACKUP_SCHEDULE_INCR: {{ .Values.backup.schedule.incr | default "0 */6 * * *" | quote }}
+  
+  # GDPR configuration
+  GDPR_DATA_RETENTION_DAYS: {{ .Values.gdpr.dataRetentionDays | default "2555" | quote }} # 7 years
+  GDPR_EXPORT_EXPIRY_HOURS: {{ .Values.gdpr.exportExpiryHours | default "72" | quote }}
+  
+  # Platform configuration
+  {{- range $platform, $config := .Values.platforms }}
+  {{ upper $platform }}_ENABLED: {{ $config.enabled | quote }}
+  {{ upper $platform }}_RATE_LIMIT: {{ $config.rateLimit | default "100" | quote }}
+  {{- end }}

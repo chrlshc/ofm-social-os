@@ -1,0 +1,472 @@
+name: Deploy Canary
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'marketing/**'
+      - '.github/workflows/deploy-canary.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      canary_weight:
+        description: 'Canary traffic weight (%)'
+        required: true
+        default: '10'
+        type: string
+      auto_promote:
+        description: 'Auto-promote after success'
+        required: true
+        default: true
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/api
+
+concurrency:
+  group: deploy-canary-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  # =============================================
+  # Pre-deployment Checks
+  # =============================================
+  pre-checks:
+    runs-on: ubuntu-latest
+    outputs:
+      should-deploy: ${{ steps.check.outputs.should-deploy }}
+      environment: ${{ steps.env.outputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pre-deployment checks
+        id: check
+        run: |
+          # Check if we should proceed with deployment
+          should_deploy="true"
+          
+          # Check for emergency stop
+          if [[ -f "EMERGENCY_STOP" ]]; then
+            echo "❌ Emergency stop file detected, skipping deployment"
+            should_deploy="false"
+          fi
+          
+          # Check if staging environment is healthy before promoting to production
+          if [[ "${{ steps.env.outputs.environment }}" == "production" ]]; then
+            echo "🔍 Checking staging environment health..."
+            # Add health checks here
+          fi
+          
+          echo "should-deploy=$should_deploy" >> $GITHUB_OUTPUT
+
+  # =============================================
+  # Build and Push Images
+  # =============================================
+  build:
+    needs: pre-checks
+    if: needs.pre-checks.outputs.should-deploy == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value={{branch}}-{{date 'YYYYMMDD'}}-{{sha}}
+            type=raw,value=canary,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./marketing/backend/api
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            VERSION=${{ github.sha }}
+            BUILD_DATE=${{ github.run_id }}
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
+
+  # =============================================
+  # Security Scanning
+  # =============================================
+  security-scan:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scan image for vulnerabilities
+        uses: anchore/scan-action@v3
+        with:
+          image: ${{ needs.build.outputs.image-tag }}
+          fail-build: true
+          severity-cutoff: high
+
+  # =============================================
+  # Deploy Canary
+  # =============================================
+  deploy-canary:
+    needs: [pre-checks, build, security-scan]
+    runs-on: ubuntu-latest
+    environment: 
+      name: ${{ needs.pre-checks.outputs.environment }}-canary
+      url: https://api-${{ needs.pre-checks.outputs.environment }}.ofm.social
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: '3.13.0'
+
+      - name: Add Helm repositories
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add grafana https://grafana.github.io/helm-charts
+          helm repo update
+
+      - name: Deploy with Helm (Canary)
+        run: |
+          # Set deployment values
+          CANARY_WEIGHT="${{ github.event.inputs.canary_weight || '10' }}"
+          AUTO_PROMOTE="${{ github.event.inputs.auto_promote || 'true' }}"
+          ENVIRONMENT="${{ needs.pre-checks.outputs.environment }}"
+          
+          # Create values override file
+          cat > canary-values.yaml << EOF
+          global:
+            environment: ${ENVIRONMENT}
+            imageRegistry: ${{ env.REGISTRY }}/
+          
+          canary:
+            enabled: true
+            weight: ${CANARY_WEIGHT}
+            autoPromote: ${AUTO_PROMOTE}
+            duration: 48h
+            analysis:
+              interval: 5m
+              threshold: 5
+          
+          api:
+            image:
+              repository: ${{ env.IMAGE_NAME }}
+              tag: ${{ github.sha }}
+          
+          featureFlags:
+            platforms:
+              instagram:
+                enabled: true
+                canaryPercentage: ${CANARY_WEIGHT}
+              tiktok:
+                enabled: true
+                canaryPercentage: ${CANARY_WEIGHT}
+              x:
+                enabled: false
+                canaryPercentage: 0
+              reddit:
+                enabled: true
+                canaryPercentage: ${CANARY_WEIGHT}
+          EOF
+          
+          # Deploy using Helm
+          helm upgrade --install \
+            ofm-social-os-${ENVIRONMENT} \
+            ./marketing/k8s/helm/ofm-social-os \
+            --namespace ofm-${ENVIRONMENT} \
+            --create-namespace \
+            --values canary-values.yaml \
+            --set-string api.image.tag=${{ github.sha }} \
+            --wait \
+            --timeout=10m
+
+      - name: Verify deployment
+        run: |
+          ENVIRONMENT="${{ needs.pre-checks.outputs.environment }}"
+          
+          # Wait for rollout to be ready
+          kubectl rollout status deployment/ofm-social-os-${ENVIRONMENT}-api -n ofm-${ENVIRONMENT} --timeout=300s
+          kubectl rollout status deployment/ofm-social-os-${ENVIRONMENT}-api-canary -n ofm-${ENVIRONMENT} --timeout=300s
+          
+          # Check pod health
+          kubectl get pods -n ofm-${ENVIRONMENT} -l app.kubernetes.io/name=ofm-social-os
+          
+          # Test endpoints
+          API_URL="https://api-${ENVIRONMENT}.ofm.social"
+          
+          echo "🔍 Testing API health endpoint..."
+          curl -f "${API_URL}/health" || exit 1
+          
+          echo "🔍 Testing canary traffic..."
+          curl -f -H "X-Canary: always" "${API_URL}/health" || exit 1
+
+  # =============================================
+  # SLO Monitoring & Gates
+  # =============================================
+  monitor-slos:
+    needs: [pre-checks, deploy-canary]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Monitor SLO Gates
+        timeout-minutes: 30
+        run: |
+          ENVIRONMENT="${{ needs.pre-checks.outputs.environment }}"
+          PROMETHEUS_URL="http://prometheus-server.monitoring.svc.cluster.local"
+          
+          echo "🔍 Starting SLO monitoring for canary deployment..."
+          
+          # SLO thresholds
+          SUCCESS_RATE_THRESHOLD=0.95
+          LATENCY_P95_THRESHOLD=10000
+          ERROR_RATE_THRESHOLD=0.01
+          
+          # Monitor for 15 minutes
+          for i in {1..15}; do
+            echo "📊 SLO Check $i/15..."
+            
+            # Check success rate
+            SUCCESS_RATE=$(kubectl exec -n monitoring deployment/prometheus-server -- \
+              promtool query instant \
+              'sum(rate(publish_requests_total{status!~"5..",version="canary"}[5m])) / sum(rate(publish_requests_total{version="canary"}[5m]))' \
+              | tail -1 | awk '{print $2}')
+            
+            # Check P95 latency
+            LATENCY_P95=$(kubectl exec -n monitoring deployment/prometheus-server -- \
+              promtool query instant \
+              'histogram_quantile(0.95, sum by(le)(rate(publish_latency_ms_bucket{version="canary"}[5m])))' \
+              | tail -1 | awk '{print $2}')
+            
+            # Check error rate
+            ERROR_RATE=$(kubectl exec -n monitoring deployment/prometheus-server -- \
+              promtool query instant \
+              'sum(rate(http_requests_total{status=~"5..",version="canary"}[5m])) / sum(rate(http_requests_total{version="canary"}[5m]))' \
+              | tail -1 | awk '{print $2}')
+            
+            echo "📈 Metrics:"
+            echo "  Success Rate: ${SUCCESS_RATE:-0} (threshold: ${SUCCESS_RATE_THRESHOLD})"
+            echo "  P95 Latency: ${LATENCY_P95:-0}ms (threshold: ${LATENCY_P95_THRESHOLD}ms)"
+            echo "  Error Rate: ${ERROR_RATE:-0} (threshold: ${ERROR_RATE_THRESHOLD})"
+            
+            # Check if any SLO is breached
+            BREACH_DETECTED=false
+            
+            if (( $(echo "${SUCCESS_RATE:-0} < ${SUCCESS_RATE_THRESHOLD}" | bc -l) )); then
+              echo "❌ Success rate SLO breached!"
+              BREACH_DETECTED=true
+            fi
+            
+            if (( $(echo "${LATENCY_P95:-0} > ${LATENCY_P95_THRESHOLD}" | bc -l) )); then
+              echo "❌ Latency P95 SLO breached!"
+              BREACH_DETECTED=true
+            fi
+            
+            if (( $(echo "${ERROR_RATE:-0} > ${ERROR_RATE_THRESHOLD}" | bc -l) )); then
+              echo "❌ Error rate SLO breached!"
+              BREACH_DETECTED=true
+            fi
+            
+            if [[ "$BREACH_DETECTED" == "true" ]]; then
+              echo "💥 SLO breach detected, triggering rollback..."
+              exit 1
+            fi
+            
+            echo "✅ All SLOs healthy"
+            sleep 60
+          done
+          
+          echo "🎉 Canary passed all SLO gates!"
+
+  # =============================================
+  # Automatic Rollback
+  # =============================================
+  rollback:
+    needs: [pre-checks, deploy-canary, monitor-slos]
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: Rollback deployment
+        run: |
+          ENVIRONMENT="${{ needs.pre-checks.outputs.environment }}"
+          
+          echo "🔄 Rolling back canary deployment..."
+          
+          # Scale down canary deployment
+          kubectl scale deployment ofm-social-os-${ENVIRONMENT}-api-canary \
+            --replicas=0 -n ofm-${ENVIRONMENT}
+          
+          # Update ingress to remove canary traffic
+          kubectl patch ingress ofm-social-os-${ENVIRONMENT}-api-canary \
+            -n ofm-${ENVIRONMENT} \
+            --type='json' \
+            -p='[{"op": "replace", "path": "/metadata/annotations/nginx.ingress.kubernetes.io~1canary-weight", "value": "0"}]'
+          
+          # Wait for rollback to complete
+          kubectl rollout status deployment/ofm-social-os-${ENVIRONMENT}-api -n ofm-${ENVIRONMENT}
+          
+          echo "✅ Rollback completed"
+
+      - name: Notify rollback
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: |
+            {
+              "text": "🔄 Canary Rollback Completed",
+              "attachments": [{
+                "color": "warning",
+                "fields": [
+                  {"title": "Environment", "value": "${{ needs.pre-checks.outputs.environment }}", "short": true},
+                  {"title": "Commit", "value": "${{ github.sha }}", "short": true},
+                  {"title": "Reason", "value": "SLO breach detected", "short": false}
+                ]
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # =============================================
+  # Success Notification & Promotion
+  # =============================================
+  notify-success:
+    needs: [pre-checks, deploy-canary, monitor-slos]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Notify success
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: |
+            {
+              "text": "🎉 Canary Deployment Successful",
+              "attachments": [{
+                "color": "good",
+                "fields": [
+                  {"title": "Environment", "value": "${{ needs.pre-checks.outputs.environment }}", "short": true},
+                  {"title": "Commit", "value": "${{ github.sha }}", "short": true},
+                  {"title": "Canary Weight", "value": "${{ github.event.inputs.canary_weight || '10' }}%", "short": true},
+                  {"title": "Auto Promote", "value": "${{ github.event.inputs.auto_promote || 'true' }}", "short": true}
+                ]
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Create promotion issue
+        if: github.event.inputs.auto_promote != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Promote Canary to 100% - ${context.sha.substring(0, 7)}`,
+              body: `
+                ## Canary Deployment Ready for Promotion
+                
+                **Environment**: ${{ needs.pre-checks.outputs.environment }}
+                **Commit**: ${context.sha}
+                **Canary Weight**: ${{ github.event.inputs.canary_weight || '10' }}%
+                
+                ### SLO Status ✅
+                All SLO gates passed during the monitoring period.
+                
+                ### Next Steps
+                - [ ] Review canary metrics in Grafana
+                - [ ] Approve promotion to 100%
+                - [ ] Monitor post-promotion metrics
+                
+                **Grafana Dashboard**: https://grafana.ofm.social/d/canary/canary-deployment
+              `,
+              labels: ['deployment', 'canary', 'promotion-ready']
+            });
