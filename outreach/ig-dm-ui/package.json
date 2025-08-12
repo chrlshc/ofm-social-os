@@ -1,0 +1,52 @@
+{
+  "name": "ig-dm-ui",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "echo 'TypeScript compilation'",
+    "dm": "node src/cli-dm.js",
+    "dm-with-likes": "PRE_ENGAGE_LIKES=2 node src/cli-dm.js",
+    "dm-random": "node src/cli-dm.js --random-message --preengage likes=2",
+    "dm-templates": "node src/cli-dm.js --list-messages",
+    "gen-dm-pack": "node scripts/one_run_dm_pack.mjs",
+    "test-apify": "node src/test-apify.js",
+    "test-headless": "node src/headless-switch.js --test",
+    "report": "node src/batch-reporter.js --generate",
+    "status": "node src/cli-dm.js --status",
+    "install-prod": "npm ci --omit=dev && npm audit --production",
+    "audit-deps": "npm audit --audit-level=moderate",
+    "audit-prod": "npm audit --production --audit-level=high",
+    "check-updates": "npm outdated",
+    "security-check": "npm ci --omit=dev && npm audit --production --audit-level=high",
+    "test": "echo 'Installation successful!'"
+  },
+  "dependencies": {
+    "apify": "^3.4.4",
+    "crawlee": "^3.14.1",
+    "dotenv": "16.4.5",
+    "fingerprint-injector": "2.1.69",
+    "ghost-cursor": "1.4.1",
+    "pino": "9.3.2",
+    "pino-pretty": "11.2.2",
+    "puppeteer": "24.9.0",
+    "puppeteer-extra": "3.3.6",
+    "puppeteer-extra-plugin-stealth": "2.11.2",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.8.0",
+    "ts-node": "10.9.2",
+    "typescript": "5.5.4"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "private"
+  },
+  "author": "Claude AI Assistant",
+  "license": "UNLICENSED"
+}

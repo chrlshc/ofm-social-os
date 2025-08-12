@@ -1,0 +1,56 @@
+{
+  "accounts": {
+    "account_1": {
+      "username": "hunteragen_cy",
+      "password": "Francelyse76971!",
+      "tier": "premium",
+      "daily_limit": 40,
+      "target_regions": [
+        "US"
+      ],
+      "niche_focus": [
+        "premium_models",
+        "business_accounts"
+      ],
+      "status": "active",
+      "last_action": null,
+      "session_token": null
+    },
+    "account_2": {
+      "username": "lollabackuup", 
+      "password": "Francelyse76971",
+      "tier": "premium",
+      "daily_limit": 40,
+      "target_regions": [
+        "US"
+      ],
+      "niche_focus": [
+        "premium_models",
+        "high_engagement"
+      ],
+      "status": "active",
+      "last_action": null,
+      "session_token": null
+    },
+  },
+  "proxy": {
+    "provider": "DataImpulse",
+    "plan": "Residential",
+    "monthly_cost": 0,
+    "endpoints": {
+      "US": {
+        "host": "gw.dataimpulse.com",
+        "port": 10000,
+        "username": "0fc1fa8c300b4e95b93b",
+        "password": "d90418ce2d2b30a7"
+      }
+    },
+    "rotation_settings": {
+      "sticky_session": false,
+      "rotation_interval": "10-15_actions",
+      "max_session_duration": 600
+    }
+  },
+  "usage_tracker": {},
+  "last_updated": "2025-08-01T09:59:07.514734"
+}

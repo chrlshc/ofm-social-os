@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Instagram DM Message Validator",
+  "description": "Validates Instagram DM messages for compliance and spam prevention",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "maxLength": 120,
+        "minLength": 10,
+        "pattern": "^[a-z0-9\\s\\-—(){}.,!?']+$",
+        "description": "Message text in lowercase, no emojis, no URLs"
+      },
+      "placeholders": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": ["{model_name}", "{niche}", "{city}"]
+        },
+        "uniqueItems": true,
+        "description": "Allowed placeholder variables"
+      },
+      "forbidden_terms": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "sex", "sexual", "services", "rates", "price", "pricing",
+            "link", "http", "www", "@", "onlyfans", "of", "subscribe",
+            "porn", "adult", "xxx", "nudes", "naked", "explicit"
+          ]
+        },
+        "description": "Terms that must NOT appear in message"
+      }
+    },
+    "required": ["text"],
+    "additionalProperties": false,
+    "not": {
+      "properties": {
+        "text": {
+          "anyOf": [
+            {"pattern": "sex"},
+            {"pattern": "sexual"},
+            {"pattern": "services"},
+            {"pattern": "rates"},
+            {"pattern": "price"},
+            {"pattern": "pricing"},
+            {"pattern": "link"},
+            {"pattern": "http"},
+            {"pattern": "www"},
+            {"pattern": "@"},
+            {"pattern": "onlyfans"},
+            {"pattern": "\\bof\\b"},
+            {"pattern": "subscribe"},
+            {"pattern": "porn"},
+            {"pattern": "adult"},
+            {"pattern": "xxx"},
+            {"pattern": "nudes"},
+            {"pattern": "naked"},
+            {"pattern": "explicit"}
+          ]
+        }
+      }
+    }
+  },
+  "minItems": 1,
+  "maxItems": 100
+}

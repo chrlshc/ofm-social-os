@@ -1,0 +1,178 @@
+{
+  "version": "2.0",
+  "description": "SaaS Closer Templates - Ultra-short, conversion-focused",
+  "primary_cta": "Start free beta → [SIGNUP_LINK]",
+  
+  "templates": {
+    "R1_VALUE_PROP": {
+      "en": "We turn your OF into autopilot: smart DMs, pricing, analytics. Beta is open — 5-min setup. Want the link?",
+      "fr": "On automatise ton OF : DMs intelligents, pricing, analytics. Beta ouverte — 5min de setup. Tu veux le lien ?",
+      "es": "Automatizamos tu OF: DMs inteligentes, precios, analíticas. Beta abierta — setup 5min. ¿Quieres el link?",
+      "de": "Wir automatisieren dein OF: smarte DMs, Preise, Analytics. Beta offen — 5min Setup. Link?"
+    },
+
+    "PRICING_RESPONSE": {
+      "en": "Starter €49 (core automations). Pro €149 (advanced AI). Free beta now — wanna try?",
+      "fr": "Starter 49€ (automations de base). Pro 149€ (IA avancée). Beta gratuite maintenant — tu testes ?",
+      "es": "Starter €49 (automatizaciones básicas). Pro €149 (IA avanzada). Beta gratis ahora — ¿lo pruebas?",
+      "de": "Starter €49 (Basis-Automationen). Pro €149 (erweiterte KI). Kostenlose Beta — probieren?"
+    },
+
+    "TRUST_RESPONSE": {
+      "en": "You keep 100% ownership. We follow OF ToS and standard data practices. Start free — see it live?",
+      "fr": "Tu gardes 100% de propriété. On respecte les CGU OF et pratiques data standard. Gratuit — voir en live ?",
+      "es": "Mantienes 100% propiedad. Seguimos ToS de OF y prácticas estándar. Gratis — ¿verlo live?",
+      "de": "100% Eigentum bleibt bei dir. Wir folgen OF ToS und Standard-Datenpraktiken. Kostenlos testen?"
+    },
+
+    "MIGRATION_RESPONSE": {
+      "en": "No agency, no long contracts. Plug-in, test, keep what works. Link?",
+      "fr": "Pas d'agence, pas de contrats longs. Tu branches, tu testes, tu gardes ce qui marche. Lien ?",
+      "es": "Sin agencia, sin contratos largos. Conectas, pruebas, quedas lo que funciona. ¿Link?",
+      "de": "Keine Agentur, keine langen Verträge. Anschließen, testen, behalten was funktioniert. Link?"
+    },
+
+    "VALUE_NUDGE": {
+      "en": "We save you hours/day and lift tips with smart DM flows. Wanna see?",
+      "fr": "On te fait gagner des heures/jour et booste les tips avec des DMs intelligents. Tu veux voir ?",
+      "es": "Te ahorramos horas/día y aumentamos tips con flujos DM inteligentes. ¿Quieres ver?",
+      "de": "Sparen Stunden/Tag und erhöhen Tips mit smarten DM-Flows. Ansehen?"
+    },
+
+    "SOFT_EXIT": {
+      "en": "All good. If you ever want a no-call trial: Start free beta → [LINK]",
+      "fr": "Pas de souci. Si jamais tu veux un essai sans appel : Beta gratuite → [LINK]",
+      "es": "Todo bien. Si alguna vez quieres prueba sin llamada: Beta gratis → [LINK]",
+      "de": "Alles gut. Falls du mal eine Testversion ohne Anruf willst: Kostenlose Beta → [LINK]"
+    },
+
+    "PROOF_URGENCY": {
+      "en": "Creators using it see +25–60% chat revenue in week 1*. Beta seats are limited this month. Ready to start?",
+      "fr": "Les créatrices qui l'utilisent voient +25-60% revenus chat en semaine 1*. Places beta limitées ce mois. Prête ?",
+      "es": "Creadoras que lo usan ven +25-60% ingresos chat en semana 1*. Plazas beta limitadas este mes. ¿Lista?",
+      "de": "Creator sehen +25-60% Chat-Revenue in Woche 1*. Beta-Plätze limitiert diesen Monat. Bereit?"
+    },
+
+    "FINAL_CLOSE": {
+      "en": "Cool — grab your beta spot here → Start free beta. I'll check back in 24h if you need help.",
+      "fr": "Cool — prends ta place beta ici → Beta gratuite. Je reviens dans 24h si tu as besoin d'aide.",
+      "es": "Genial — toma tu lugar beta aquí → Beta gratis. Vuelvo en 24h si necesitas ayuda.",
+      "de": "Cool — sichere dir deinen Beta-Platz hier → Kostenlose Beta. Ich schaue in 24h vorbei falls du Hilfe brauchst."
+    },
+
+    "SIGNUP_ENCOURAGEMENT": {
+      "en": "Nice! The signup takes 2 minutes. Connect your OF and we'll show first results in your dashboard within the hour 🚀",
+      "fr": "Super ! L'inscription prend 2 minutes. Connecte ton OF et on t'affiche les premiers résultats dans l'heure 🚀",
+      "es": "¡Genial! El registro toma 2 minutos. Conecta tu OF y mostramos primeros resultados en una hora 🚀",
+      "de": "Nice! Die Anmeldung dauert 2 Minuten. Verbinde dein OF und wir zeigen erste Ergebnisse in einer Stunde 🚀"
+    },
+
+    "CONNECTION_SUCCESS": {
+      "en": "🎉 Setup complete! Your automation is learning from your chat history. First smart DMs going out now. Check your dashboard for live results.",
+      "fr": "🎉 Setup terminé ! Ton automation apprend de ton historique chat. Premiers DMs intelligents en cours. Regarde ton dashboard pour les résultats live.",
+      "es": "🎉 ¡Setup completo! Tu automatización aprende de tu historial de chat. Primeros DMs inteligentes saliendo. Revisa tu dashboard para resultados live.",
+      "de": "🎉 Setup komplett! Deine Automatisierung lernt aus deiner Chat-Historie. Erste smarte DMs gehen raus. Dashboard für Live-Ergebnisse checken."
+    },
+
+    "FIRST_REVENUE_CELEBRATION": {
+      "en": "🔥 First revenue generated! €{amount} in {timeframe}. Your automation is working. Want to scale up to Pro plan for advanced features?",
+      "fr": "🔥 Premiers revenus générés ! {amount}€ en {timeframe}. Ton automation marche. Tu veux passer au plan Pro pour les fonctions avancées ?",
+      "es": "🔥 ¡Primeros ingresos generados! €{amount} en {timeframe}. Tu automatización funciona. ¿Quieres subir a plan Pro para funciones avanzadas?",
+      "de": "🔥 Erste Einnahmen generiert! €{amount} in {timeframe}. Deine Automatisierung funktioniert. Auf Pro-Plan für erweiterte Features upgraden?"
+    }
+  },
+
+  "objection_handlers": {
+    "price_concern": {
+      "en": "ROI usually covers cost in 3-7 days. Free beta lets you test before any payment.",
+      "fr": "Le ROI couvre généralement le coût en 3-7 jours. La beta gratuite te permet de tester avant paiement.",
+      "es": "ROI generalmente cubre costo en 3-7 días. Beta gratis te permite probar antes de pagar.",
+      "de": "ROI deckt meist Kosten in 3-7 Tagen. Kostenlose Beta zum Testen vor Zahlung."
+    },
+
+    "time_concern": {
+      "en": "5-min setup, then it runs itself. Actually saves you hours daily.",
+      "fr": "5min de setup, puis ça tourne tout seul. Te fait gagner des heures par jour en fait.",
+      "es": "5min setup, luego se ejecuta solo. En realidad te ahorra horas diarias.",
+      "de": "5min Setup, dann läuft es allein. Spart dir tatsächlich Stunden täglich."
+    },
+
+    "trust_concern": {
+      "en": "Used by 200+ creators. Your data stays yours, exportable anytime. OF-compliant.",
+      "fr": "Utilisé par 200+ créatrices. Tes données restent à toi, exportables à tout moment. Conforme OF.",
+      "es": "Usado por 200+ creadoras. Tus datos siguen siendo tuyos, exportables siempre. Compatible OF.",
+      "de": "Von 200+ Creatorn genutzt. Deine Daten bleiben deine, jederzeit exportierbar. OF-konform."
+    },
+
+    "technical_concern": {
+      "en": "Zero technical skills needed. If you can use Instagram, you can use this.",
+      "fr": "Zéro compétence technique nécessaire. Si tu sais utiliser Instagram, tu sais utiliser ça.",
+      "es": "Cero habilidades técnicas necesarias. Si usas Instagram, puedes usar esto.",
+      "de": "Keine technischen Skills nötig. Wenn du Instagram nutzen kannst, kannst du das auch."
+    },
+
+    "competition": {
+      "en": "Most tools are agency-focused or outdated. We're creator-owned, built for 2025 OF.",
+      "fr": "La plupart des outils sont orientés agence ou dépassés. Nous sommes propriété créatrice, conçu pour OF 2025.",
+      "es": "Mayoría herramientas son para agencias o desactualizadas. Somos propiedad creador, hechos para OF 2025.",
+      "de": "Meiste Tools sind agentur-fokussiert oder veraltet. Wir sind creator-owned, für OF 2025 gemacht."
+    }
+  },
+
+  "followup_sequences": {
+    "no_reply_24h": {
+      "en": "Quick question — did the beta link work for you? Setup takes 2 mins if you want to give it a try.",
+      "fr": "Question rapide — le lien beta a marché pour toi ? Le setup prend 2min si tu veux essayer.",
+      "es": "Pregunta rápida — ¿te funcionó el link beta? Setup toma 2min si quieres probarlo.",
+      "de": "Kurze Frage — hat der Beta-Link für dich funktioniert? Setup dauert 2min falls du es versuchen willst."
+    },
+
+    "clicked_no_signup": {
+      "en": "Saw you checked out the page! Any questions about the setup? Happy to help get you started.",
+      "fr": "J'ai vu que tu as regardé la page ! Des questions sur le setup ? Content d'aider pour commencer.",
+      "es": "¡Vi que revisaste la página! ¿Alguna pregunta sobre setup? Feliz de ayudarte a empezar.",
+      "de": "Habe gesehen, dass du die Seite angeschaut hast! Fragen zum Setup? Helfe gerne beim Start."
+    },
+
+    "signed_up_no_connection": {
+      "en": "Great that you signed up! The magic happens when you connect your OF. Need help with the connection step?",
+      "fr": "Super que tu te sois inscrite ! La magie arrive quand tu connectes ton OF. Besoin d'aide pour l'étape connexion ?",
+      "es": "¡Genial que te registraste! La magia pasa cuando conectas tu OF. ¿Necesitas ayuda con el paso conexión?",
+      "de": "Toll, dass du dich angemeldet hast! Die Magie passiert, wenn du dein OF verbindest. Hilfe beim Verbindungsschritt?"
+    }
+  },
+
+  "personalization_variables": {
+    "username": "{username}",
+    "platform": "{platform}",
+    "follower_count": "{followers}",
+    "signup_link": "{signup_link}",
+    "dashboard_link": "{dashboard_link}",
+    "revenue_amount": "{amount}",
+    "timeframe": "{timeframe}",
+    "creator_count": "{creator_count}"
+  },
+
+  "a_b_variants": {
+    "R1_VALUE_PROP_B": {
+      "en": "Turn your DMs into revenue on autopilot. Beta creators see +40% chat income week 1. 5-min setup — try it?",
+      "fr": "Transforme tes DMs en revenus en autopilote. Les créatrices beta voient +40% revenus chat semaine 1. 5min setup — tu testes ?",
+      "es": "Convierte tus DMs en ingresos en autopiloto. Creadoras beta ven +40% ingresos chat semana 1. 5min setup — ¿pruebas?",
+      "de": "Verwandle deine DMs in Autopilot-Revenue. Beta-Creator sehen +40% Chat-Einkommen Woche 1. 5min Setup — probieren?"
+    },
+
+    "R1_VALUE_PROP_C": {
+      "en": "Smart OF automation: better DMs, dynamic pricing, real analytics. Beta open now — ready for 5-min setup?",
+      "fr": "Automation OF intelligente : meilleurs DMs, pricing dynamique, vraies analytics. Beta ouverte — prête pour 5min setup ?",
+      "es": "Automatización OF inteligente: mejores DMs, precios dinámicos, analíticas reales. Beta abierta — ¿lista para 5min setup?",
+      "de": "Smarte OF-Automatisierung: bessere DMs, dynamische Preise, echte Analytics. Beta offen — bereit für 5min Setup?"
+    }
+  },
+
+  "compliance_disclaimers": {
+    "en": "*Results based on beta user data. Individual results may vary. We respect OF ToS and creator ownership.",
+    "fr": "*Résultats basés sur données utilisateurs beta. Résultats individuels peuvent varier. On respecte CGU OF et propriété créatrice.",
+    "es": "*Resultados basados en datos usuarios beta. Resultados individuales pueden variar. Respetamos ToS OF y propiedad creadora.",
+    "de": "*Ergebnisse basieren auf Beta-Nutzerdaten. Individuelle Ergebnisse können variieren. Wir respektieren OF ToS und Creator-Eigentum."
+  }
+}

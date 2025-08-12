@@ -1,0 +1,278 @@
+{
+  "version": "2.0",
+  "description": "SaaS-first Closer State Machine - Self-serve conversion pipeline",
+  "north_star": "Start now — no call, 5-min setup, cancel anytime",
+  "primary_cta": "Start free beta",
+  
+  "states": {
+    "INITIAL": {
+      "description": "Awaiting first reply to initial DM",
+      "timeout": "72h",
+      "on_timeout": "NURTURE_SEQUENCE"
+    },
+    
+    "NEW_REPLY": {
+      "description": "Process incoming reply",
+      "on_enter": [
+        "classify_intent",
+        "detect_language", 
+        "extract_objections",
+        "score_trust_signals"
+      ],
+      "routes": {
+        "Interested_SaaS": "CLOSE_R1",
+        "Pricing_SaaS": "CLOSE_PRICING", 
+        "Trust_Compliance": "CLOSE_TRUST",
+        "Migration_Agency": "CLOSE_MIGRATION",
+        "Neutral": "NUDGE_VALUE",
+        "Negative": "SOFT_EXIT",
+        "Language_Barrier": "LANGUAGE_ADAPT"
+      }
+    },
+
+    "CLOSE_R1": {
+      "description": "Direct close with value prop",
+      "action": "send_template",
+      "template": "R1_VALUE_PROP",
+      "wait": "24h",
+      "next": "FOLLOWUP_1",
+      "track_events": ["close_attempt", "cta_sent"]
+    },
+
+    "CLOSE_PRICING": {
+      "description": "Price objection handling + close",
+      "action": "send_template", 
+      "template": "PRICING_RESPONSE",
+      "wait": "24h",
+      "next": "FOLLOWUP_1",
+      "track_events": ["pricing_discussed", "cta_sent"]
+    },
+
+    "CLOSE_TRUST": {
+      "description": "Trust/compliance objection + close",
+      "action": "send_template",
+      "template": "TRUST_RESPONSE", 
+      "wait": "24h",
+      "next": "FOLLOWUP_1",
+      "track_events": ["trust_objection", "compliance_discussed", "cta_sent"]
+    },
+
+    "CLOSE_MIGRATION": {
+      "description": "Agency/migration objection + close",
+      "action": "send_template",
+      "template": "MIGRATION_RESPONSE",
+      "wait": "24h", 
+      "next": "FOLLOWUP_1",
+      "track_events": ["migration_discussed", "cta_sent"]
+    },
+
+    "NUDGE_VALUE": {
+      "description": "Value nudge for neutral responses",
+      "action": "send_template",
+      "template": "VALUE_NUDGE",
+      "wait": "24h",
+      "next": "FOLLOWUP_1",
+      "track_events": ["value_nudge_sent"]
+    },
+
+    "SOFT_EXIT": {
+      "description": "Respectful exit for negative responses",
+      "action": "send_template",
+      "template": "SOFT_EXIT",
+      "wait": "168h",
+      "next": "ARCHIVE",
+      "track_events": ["negative_response", "soft_exit"]
+    },
+
+    "LANGUAGE_ADAPT": {
+      "description": "Adapt to detected language",
+      "action": "set_language_context",
+      "next": "NEW_REPLY"
+    },
+
+    "FOLLOWUP_1": {
+      "description": "First followup if no engagement",
+      "guard": "no_click_signup AND no_reply",
+      "action": "send_template",
+      "template": "PROOF_URGENCY",
+      "wait": "48h",
+      "next": "FOLLOWUP_2",
+      "track_events": ["followup_1_sent"]
+    },
+
+    "FOLLOWUP_2": {
+      "description": "Final close attempt", 
+      "guard": "no_click_signup",
+      "action": "send_template",
+      "template": "FINAL_CLOSE",
+      "wait": "168h",
+      "next": "NURTURE_SEQUENCE",
+      "track_events": ["final_close_sent"]
+    },
+
+    "NURTURE_SEQUENCE": {
+      "description": "Long-term nurture for cold prospects",
+      "action": "add_to_nurture_list",
+      "wait": "720h",
+      "next": "ARCHIVE",
+      "track_events": ["moved_to_nurture"]
+    },
+
+    "CLICKED_SIGNUP": {
+      "description": "User clicked signup link",
+      "on_enter": "track_click_signup", 
+      "action": "send_template",
+      "template": "SIGNUP_ENCOURAGEMENT",
+      "wait": "24h",
+      "next": "SIGNUP_FOLLOWUP",
+      "track_events": ["click_signup", "signup_page_visit"]
+    },
+
+    "SIGNED_UP": {
+      "description": "User completed signup",
+      "on_enter": "track_signup",
+      "action": "trigger_onboarding_sequence",
+      "next": "ONBOARDING",
+      "track_events": ["signup_completed", "onboarding_started"]
+    },
+
+    "ONBOARDING": {
+      "description": "5-minute onboarding flow",
+      "wait": "72h",
+      "next": "ONBOARDING_FOLLOWUP",
+      "track_events": ["onboarding_in_progress"]
+    },
+
+    "CONNECTED_OF": {
+      "description": "Successfully connected OF account",
+      "on_enter": "track_connection",
+      "action": "send_template",
+      "template": "CONNECTION_SUCCESS",
+      "wait": "168h", 
+      "next": "FIRST_REVENUE_CHECK",
+      "track_events": ["of_connected", "setup_completed"]
+    },
+
+    "FIRST_REVENUE": {
+      "description": "Generated first revenue",
+      "on_enter": "track_first_revenue",
+      "action": "send_template", 
+      "template": "FIRST_REVENUE_CELEBRATION",
+      "next": "SUCCESS",
+      "track_events": ["first_revenue", "success"]
+    },
+
+    "SUCCESS": {
+      "description": "Successful conversion",
+      "final": true,
+      "track_events": ["conversion_success"]
+    },
+
+    "ARCHIVE": {
+      "description": "Archived conversation",
+      "final": true,
+      "track_events": ["conversation_archived"]
+    }
+  },
+
+  "events": {
+    "Click_Signup": {
+      "action": "move_to_state",
+      "target": "CLICKED_SIGNUP"
+    },
+    "Signup": {
+      "action": "move_to_state", 
+      "target": "SIGNED_UP"
+    },
+    "Started_Onboarding": {
+      "action": "track_event",
+      "context": "onboarding_progress"
+    },
+    "Connected_OF": {
+      "action": "move_to_state",
+      "target": "CONNECTED_OF"
+    },
+    "First_Revenue": {
+      "action": "move_to_state",
+      "target": "FIRST_REVENUE"
+    },
+    "Churn_30d": {
+      "action": "track_event",
+      "context": "churn_analysis"
+    },
+    "Reply_Received": {
+      "action": "move_to_state",
+      "target": "NEW_REPLY"
+    }
+  },
+
+  "classification": {
+    "intent_classes": [
+      "Interested_SaaS",
+      "Pricing_SaaS", 
+      "Trust_Compliance",
+      "Migration_Agency",
+      "Neutral",
+      "Negative",
+      "Language_Barrier"
+    ],
+    
+    "patterns": {
+      "Interested_SaaS": [
+        "sounds good", "interested", "beta", "where do I start",
+        "tell me more", "how does it work", "sign me up",
+        "sounds cool", "im in", "lets try", "show me"
+      ],
+      
+      "Pricing_SaaS": [
+        "how much", "price", "cost", "trial", "free",
+        "what's included", "plans", "subscription", "pay"
+      ],
+      
+      "Trust_Compliance": [
+        "is it allowed", "safe", "data", "login", "privacy",
+        "against tos", "account security", "banned", "legal"
+      ],
+      
+      "Migration_Agency": [
+        "have a manager", "agency", "leaving", "switch",
+        "already working with", "contract", "current setup"
+      ],
+      
+      "Neutral": [
+        "hi", "hello", "thanks", "ok", "cool", "hmm", "maybe"
+      ],
+      
+      "Negative": [
+        "not interested", "spam", "stop", "no thanks", 
+        "leave me alone", "remove", "unsubscribe"
+      ],
+      
+      "Language_Barrier": [
+        "french", "français", "español", "deutsch", "italiano"
+      ]
+    }
+  },
+
+  "conversion_targets": {
+    "reply_to_click": 0.25,
+    "click_to_signup": 0.30,
+    "signup_to_connected_of": 0.60,
+    "connected_of_to_first_revenue_14d": 0.40
+  },
+
+  "timing": {
+    "initial_reply_window": "72h",
+    "followup_1_delay": "24h", 
+    "followup_2_delay": "48h",
+    "nurture_delay": "168h",
+    "archive_delay": "720h"
+  },
+
+  "personalization": {
+    "language_detect": true,
+    "timezone_aware": true,
+    "platform_context": true,
+    "follower_count_aware": true
+  }
+}

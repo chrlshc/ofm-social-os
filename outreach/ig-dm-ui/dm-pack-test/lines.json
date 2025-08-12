@@ -1,0 +1,82 @@
+[
+  {
+    "text": "hey youre dope, just saw your page (get more from ig)",
+    "placeholders": [
+      "{model_name}",
+      "{city}",
+      "{niche}"
+    ]
+  },
+  {
+    "text": "just found youre page (tiny way to make more $)",
+    "placeholders": [
+      "{model_name}",
+      "{city}",
+      "{niche}"
+    ]
+  },
+  {
+    "text": "just saw your page — tiny way to make more $",
+    "placeholders": [
+      "{model_name}",
+      "{city}",
+      "{niche}"
+    ]
+  },
+  {
+    "text": "hey its mia — found your page today (get more from ig)",
+    "placeholders": [
+      "{model_name}",
+      "{city}",
+      "{niche}"
+    ]
+  },
+  {
+    "text": "your page looks clean — get more from ig in la",
+    "placeholders": [
+      "{model_name}",
+      "{city}",
+      "{niche}"
+    ]
+  },
+  {
+    "text": "hey youre dope — i can help you earn more for fitness",
+    "placeholders": [
+      "{model_name}",
+      "{city}",
+      "{niche}"
+    ]
+  },
+  {
+    "text": "your page looks clean, just found your page (more paid fans, same vibe)",
+    "placeholders": [
+      "{model_name}",
+      "{city}",
+      "{niche}"
+    ]
+  },
+  {
+    "text": "hey youre amazing (make more from the same posts)",
+    "placeholders": [
+      "{model_name}",
+      "{city}",
+      "{niche}"
+    ]
+  },
+  {
+    "text": "just saw your page — more paid fans, same vibe",
+    "placeholders": [
+      "{model_name}",
+      "{city}",
+      "{niche}"
+    ]
+  },
+  {
+    "text": "hey its mia — i just found youre page (i can help you earn more)",
+    "placeholders": [
+      "{model_name}",
+      "{city}",
+      "{niche}"
+    ]
+  }
+]
