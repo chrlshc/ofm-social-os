@@ -1,0 +1,220 @@
+# GitLeaks configuration for OFM Social OS
+# Docs: https://github.com/gitleaks/gitleaks
+
+title = "OFM Social OS GitLeaks Configuration"
+
+# =====================================
+# Global Settings
+# =====================================
+
+[extend]
+# Use default ruleset and extend with custom rules
+useDefault = true
+
+# =====================================
+# Custom Rules for Platform APIs
+# =====================================
+
+[[rules]]
+id = "instagram-access-token"
+description = "Instagram Graph API Access Token"
+regex = '''IGQVJ[A-Za-z0-9_-]{100,}'''
+tags = ["instagram", "api-token", "secret"]
+
+[[rules]]
+id = "tiktok-access-token" 
+description = "TikTok API Access Token"
+regex = '''act\.[a-f0-9]{32}'''
+tags = ["tiktok", "api-token", "secret"]
+
+[[rules]]
+id = "reddit-refresh-token"
+description = "Reddit OAuth Refresh Token"
+regex = '''[0-9]+-[A-Za-z0-9_-]{20,}'''
+tags = ["reddit", "refresh-token", "secret"]
+
+[[rules]]
+id = "x-bearer-token"
+description = "X (Twitter) API Bearer Token" 
+regex = '''AAAAAAAAAAAAAAAAAAAAAA[A-Za-z0-9%]{50,}'''
+tags = ["twitter", "x-api", "bearer-token", "secret"]
+
+[[rules]]
+id = "webhook-signature"
+description = "Webhook HMAC Signature"
+regex = '''sha256=[a-f0-9]{64}'''
+tags = ["webhook", "hmac", "signature"]
+
+[[rules]]
+id = "encryption-key"
+description = "Master Encryption Key"
+regex = '''[a-f0-9]{64}'''
+path = '''(\.env|\.env\..*|config\.json|secrets\.json)'''
+tags = ["encryption", "master-key", "secret"]
+
+[[rules]]
+id = "jwt-secret"
+description = "JWT Secret Key"
+regex = '''jwt[_-]?secret["\s]*[:=]["\s]*[A-Za-z0-9+/]{32,}'''
+tags = ["jwt", "secret"]
+
+[[rules]]  
+id = "database-credentials"
+description = "Database Connection String with Credentials"
+regex = '''postgresql://[^:]+:[^@]+@[^/]+/[^?\s]+'''
+tags = ["database", "postgresql", "credentials"]
+
+[[rules]]
+id = "redis-credentials"
+description = "Redis Connection String with Credentials"
+regex = '''redis://[^:]*:[^@]*@[^/]+'''
+tags = ["redis", "credentials"]
+
+# =====================================
+# LLM Provider API Keys
+# =====================================
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API Key"
+regex = '''sk-[A-Za-z0-9]{48}'''
+tags = ["openai", "llm", "api-key", "secret"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic Claude API Key"
+regex = '''sk-ant-[A-Za-z0-9_-]{95,}'''
+tags = ["anthropic", "claude", "llm", "api-key", "secret"]
+
+# =====================================
+# Infrastructure Secrets
+# =====================================
+
+[[rules]]
+id = "aws-secret-access-key"
+description = "AWS Secret Access Key"
+regex = '''AKIA[0-9A-Z]{16}'''
+tags = ["aws", "access-key", "secret"]
+
+[[rules]]
+id = "github-token"
+description = "GitHub Personal Access Token"
+regex = '''ghp_[A-Za-z0-9]{36}'''
+tags = ["github", "pat", "secret"]
+
+[[rules]]
+id = "slack-webhook"
+description = "Slack Webhook URL"
+regex = '''https://hooks\.slack\.com/services/[A-Z0-9/]+'''
+tags = ["slack", "webhook", "secret"]
+
+# =====================================
+# File and Path Allowlists
+# =====================================
+
+# Files to ignore completely
+[[rules.allowlist]]
+description = "Ignore example environment files"
+paths = [
+  '''\.env\.example$''',
+  '''\.env\.template$''',
+  '''\.env\.sample$'''
+]
+
+[[rules.allowlist]]
+description = "Ignore test and mock data"
+paths = [
+  '''(test|spec|mock).*\.(ts|js|json)$''',
+  '''__tests__/.*''',
+  '''tests?/.*'''
+]
+
+[[rules.allowlist]]
+description = "Ignore documentation files"
+paths = [
+  '''\.md$''',
+  '''\.txt$''',
+  '''docs?/.*'''
+]
+
+[[rules.allowlist]]
+description = "Ignore build and dependency files"
+paths = [
+  '''node_modules/.*''',
+  '''dist/.*''',
+  '''build/.*''',
+  '''coverage/.*''',
+  '''\.lock$'''
+]
+
+# =====================================  
+# Content Allowlists (False Positives)
+# =====================================
+
+[[rules.allowlist]]
+description = "Ignore placeholder values"
+regexes = [
+  '''your-.*-key-here''',
+  '''example.*key''',
+  '''test.*secret''',
+  '''dummy.*token''',
+  '''placeholder.*''',
+  '''CHANGEME''',
+  '''TODO:.*''',
+  '''FIXME:.*'''
+]
+
+[[rules.allowlist]]
+description = "Ignore common test values"
+regexes = [
+  '''test_client_id''',
+  '''test_client_secret''',
+  '''test_service_key''',
+  '''mock.*token''',
+  '''fake.*key'''
+]
+
+[[rules.allowlist]]
+description = "Ignore base64 encoded example data"
+regexes = [
+  '''dGVzdA==''',  # "test" in base64
+  '''ZXhhbXBsZQ==''',  # "example" in base64
+]
+
+# =====================================
+# Entropy Detection Settings  
+# =====================================
+
+# Reduce false positives for base64 strings
+[[rules]]
+id = "base64-high-entropy"
+description = "High entropy base64 string (potential secret)"
+entropy = 4.5
+regex = '''[A-Za-z0-9+/]{20,}={0,2}'''
+tags = ["entropy", "base64", "secret"]
+
+# Hex strings (encryption keys, tokens)
+[[rules]]
+id = "hex-high-entropy"
+description = "High entropy hex string (potential secret)"
+entropy = 3.5
+regex = '''[a-fA-F0-9]{32,}'''
+tags = ["entropy", "hex", "secret"]
+
+# =====================================
+# Commit and Branch Settings
+# =====================================
+
+# Scan all files, not just changed ones
+[extend.scan]
+maxTargetMegaBytes = 100
+
+# Stop scan on first leak (faster CI)
+[extend.scan] 
+stopOnFirstMatch = false
+
+# Verbose output for debugging
+verbose = false
+
+# Report format
+reportFormat = "json"

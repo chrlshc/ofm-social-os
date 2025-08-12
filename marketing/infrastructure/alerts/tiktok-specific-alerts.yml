@@ -1,0 +1,169 @@
+# TikTok Specific Alerts for Canari 10%
+# Monitor spam_risk_* and rate_limit_exceeded errors
+
+groups:
+  - name: tiktok_content_posting
+    rules:
+      
+      # TikTok Spam Risk Detection
+      - alert: TikTokSpamRiskDetected
+        expr: increase(publish_errors_total{platform="tiktok", error_code=~"spam_risk_.*"}[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          platform: tiktok
+          alert_type: spam_risk
+        annotations:
+          summary: "TikTok spam risk error detected"
+          description: "TikTok API returned spam_risk error codes. Account may be flagged. Error count: {{ $value }}"
+          runbook_url: "https://docs.internal/runbooks/tiktok-spam-risk"
+          
+      # TikTok Rate Limit Exceeded
+      - alert: TikTokRateLimitExceeded
+        expr: increase(publish_errors_total{platform="tiktok", error_code="rate_limit_exceeded"}[1m]) > 0
+        for: 0s
+        labels:
+          severity: warning
+          platform: tiktok
+          alert_type: rate_limit
+        annotations:
+          summary: "TikTok rate limit exceeded"
+          description: "TikTok 1-minute sliding window rate limit hit. Count: {{ $value }}"
+          runbook_url: "https://docs.internal/runbooks/tiktok-rate-limits"
+          
+      # TikTok Pending Shares Limit (5 per 24h)
+      - alert: TikTokPendingSharesLimit
+        expr: increase(publish_errors_total{platform="tiktok", error_code="pending_shares_limit"}[1h]) > 0
+        for: 0s  
+        labels:
+          severity: warning
+          platform: tiktok
+          alert_type: pending_shares
+        annotations:
+          summary: "TikTok pending shares limit reached"
+          description: "TikTok allows max 5 pending shares per 24h. Limit reached for unaudited client."
+          runbook_url: "https://docs.internal/runbooks/tiktok-pending-shares"
+          
+      # TikTok Unaudited Client Issues
+      - alert: TikTokUnauditedClientError
+        expr: increase(publish_errors_total{platform="tiktok", error_code=~".*unaudited.*|.*private_only.*"}[5m]) > 0
+        for: 0s
+        labels:
+          severity: warning  
+          platform: tiktok
+          alert_type: unaudited_client
+        annotations:
+          summary: "TikTok unaudited client restriction"
+          description: "Content posted to private-only due to unaudited client status. Consider audit process."
+          runbook_url: "https://docs.internal/runbooks/tiktok-audit-process"
+          
+      # TikTok High Error Rate (Canari Kill Switch Trigger)
+      - alert: TikTokHighErrorRateCanari
+        expr: |
+          (
+            rate(publish_errors_total{platform="tiktok"}[5m]) / 
+            rate(publish_requests_total{platform="tiktok"}[5m])
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          platform: tiktok
+          alert_type: high_error_rate
+          canari_kill_switch: "true"
+        annotations:
+          summary: "TikTok error rate > 5% - Canari kill switch trigger"
+          description: "TikTok error rate {{ $value | humanizePercentage }} exceeds 5% threshold. Consider kill switch activation."
+          runbook_url: "https://docs.internal/runbooks/canari-kill-switch"
+          
+      # TikTok Caption Length Violations  
+      - alert: TikTokCaptionLengthViolations
+        expr: increase(policy_violations_total{platform="tiktok", field="caption"}[5m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+          platform: tiktok
+          alert_type: policy_violation
+        annotations:
+          summary: "Multiple TikTok caption length violations"
+          description: "{{ $value }} caption length violations in 5min. Check media_type detection logic."
+          runbook_url: "https://docs.internal/runbooks/tiktok-caption-policy"
+
+  # TikTok Rate Limit Budget Tracking  
+  - name: tiktok_rate_budgets
+    rules:
+      
+      # TikTok 1-Minute Window Budget
+      - alert: TikTokMinuteWindowBudgetHigh
+        expr: tiktok_rate_budget_usage_1min{platform="tiktok"} > 0.8
+        for: 30s
+        labels:
+          severity: warning
+          platform: tiktok
+          alert_type: rate_budget
+          window: minute
+        annotations:
+          summary: "TikTok 1-minute rate budget high"
+          description: "TikTok 1-minute sliding window budget at {{ $value | humanizePercentage }}. Approaching 6 req/min limit."
+          
+      # TikTok Hour Window Budget  
+      - alert: TikTokHourWindowBudgetHigh
+        expr: rate_budget_usage_percentage{platform="tiktok", window="hour"} > 80
+        for: 5m
+        labels:
+          severity: warning
+          platform: tiktok  
+          alert_type: rate_budget
+          window: hour
+        annotations:
+          summary: "TikTok hourly rate budget high"
+          description: "TikTok hourly budget at {{ $value }}%. Consider throttling."
+          
+      # TikTok Daily Pending Shares Tracking
+      - alert: TikTokDailyPendingSharesHigh
+        expr: tiktok_pending_shares_24h{platform="tiktok"} >= 4
+        for: 0s
+        labels:
+          severity: warning
+          platform: tiktok
+          alert_type: pending_shares_budget
+        annotations:
+          summary: "TikTok pending shares approaching daily limit"
+          description: "{{ $value }}/5 pending shares used in 24h. Approaching daily limit."
+          runbook_url: "https://docs.internal/runbooks/tiktok-pending-shares"
+
+  # Canari 10% Monitoring
+  - name: canari_monitoring
+    rules:
+    
+      # Overall Canari Health
+      - alert: CanariOverallHealthDegraded
+        expr: |
+          (
+            rate(publish_errors_total{job="ofm-social-api"}[5m]) /
+            rate(publish_requests_total{job="ofm-social-api"}[5m])
+          ) > 0.02
+        for: 5m
+        labels:
+          severity: critical
+          alert_type: canari_health
+          canari_stage: "10_percent"
+        annotations:
+          summary: "Canari 10% health degraded - error rate > 2%"
+          description: "Overall error rate {{ $value | humanizePercentage }} exceeds 2% canari threshold."
+          action_required: "Consider rollback or kill switch activation"
+          
+      # Canari Latency SLO Breach
+      - alert: CanariLatencySLOBreach  
+        expr: |
+          histogram_quantile(0.95, 
+            rate(publish_latency_ms_bucket{job="ofm-social-api"}[5m])
+          ) > 15000
+        for: 3m
+        labels:
+          severity: critical
+          alert_type: canari_slo_breach
+          canari_stage: "10_percent"
+        annotations:
+          summary: "Canari p95 latency > 15s - SLO breach"
+          description: "p95 latency {{ $value }}ms exceeds 15s canari threshold."
+          action_required: "Investigate performance degradation or consider rollback"

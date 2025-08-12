@@ -1,0 +1,134 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'ofm-marketing'
+    environment: 'production'
+
+rule_files:
+  - "alerting.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Marketing API Application
+  - job_name: 'marketing-api'
+    static_configs:
+      - targets: ['marketing-api:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    honor_labels: true
+    params:
+      format: ['prometheus']
+
+  # Temporal Server Metrics
+  - job_name: 'temporal-server'
+    static_configs:
+      - targets: ['temporal:7233']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # PostgreSQL Metrics (via postgres_exporter)
+  - job_name: 'postgresql'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Redis Metrics (via redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Node Exporter for System Metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # SLO Manager Custom Metrics
+  - job_name: 'slo-manager'
+    static_configs:
+      - targets: ['marketing-api:3000']
+    metrics_path: '/metrics/slo'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # Backup and DR Metrics
+  - job_name: 'backup-metrics'
+    static_configs:
+      - targets: ['marketing-api:3000']
+    metrics_path: '/metrics/backup'
+    scrape_interval: 60s
+    scrape_timeout: 15s
+
+  # GDPR Compliance Metrics
+  - job_name: 'gdpr-metrics'
+    static_configs:
+      - targets: ['marketing-api:3000']
+    metrics_path: '/metrics/gdpr'
+    scrape_interval: 60s
+    scrape_timeout: 10s
+
+  # FFmpeg Worker Metrics
+  - job_name: 'ffmpeg-workers'
+    static_configs:
+      - targets: ['ffmpeg-worker:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # Webhook Processing Metrics
+  - job_name: 'webhook-processor'
+    static_configs:
+      - targets: ['marketing-api:3000']
+    metrics_path: '/metrics/webhooks'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # Rate Limiting Metrics
+  - job_name: 'rate-limiter'
+    static_configs:
+      - targets: ['marketing-api:3000']
+    metrics_path: '/metrics/ratelimit'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # Circuit Breaker Metrics
+  - job_name: 'circuit-breaker'
+    static_configs:
+      - targets: ['marketing-api:3000']
+    metrics_path: '/metrics/circuit'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # S3 Upload Metrics
+  - job_name: 's3-uploader'
+    static_configs:
+      - targets: ['marketing-api:3000']
+    metrics_path: '/metrics/s3'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # LLM Budget Metrics
+  - job_name: 'llm-budget'
+    static_configs:
+      - targets: ['marketing-api:3000']
+    metrics_path: '/metrics/llm'
+    scrape_interval: 60s
+    scrape_timeout: 10s
+
+# Recording rules for SLO calculations
+rule_files:
+  - "recording_rules.yml"

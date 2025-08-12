@@ -1,0 +1,36 @@
+name: Force ChatGPT Repository Indexation
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  trigger-indexation:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Update indexation timestamp
+      run: |
+        echo "# Repository Indexation Status" > INDEXATION_STATUS.md
+        echo "" >> INDEXATION_STATUS.md
+        echo "**Last Updated**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> INDEXATION_STATUS.md
+        echo "**Repository**: https://github.com/${{ github.repository }}" >> INDEXATION_STATUS.md
+        echo "**Status**: ✅ Active and ready for ChatGPT indexation" >> INDEXATION_STATUS.md
+        echo "" >> INDEXATION_STATUS.md
+        echo "## Files Available" >> INDEXATION_STATUS.md
+        echo "- Backend API (TypeScript)" >> INDEXATION_STATUS.md
+        echo "- Reddit Service (Python)" >> INDEXATION_STATUS.md  
+        echo "- Infrastructure (Docker, Grafana)" >> INDEXATION_STATUS.md
+        echo "- Agent Documentation" >> INDEXATION_STATUS.md
+        echo "- CI/CD Workflows" >> INDEXATION_STATUS.md
+        
+    - name: Commit indexation status
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add INDEXATION_STATUS.md
+        git commit -m "Update ChatGPT indexation status - $(date -u +'%Y-%m-%d %H:%M:%S UTC')" || exit 0
+        git push || exit 0

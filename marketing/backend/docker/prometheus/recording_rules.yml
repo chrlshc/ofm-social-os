@@ -1,0 +1,197 @@
+groups:
+  - name: slo_recording_rules
+    interval: 30s
+    rules:
+      # Publishing SLO Metrics
+      - record: slo:publish_latency_p95
+        expr: histogram_quantile(0.95, sum by(le)(rate(publish_latency_ms_bucket[5m])))
+        labels:
+          slo_type: "latency"
+          service: "publishing"
+
+      - record: slo:publish_success_rate
+        expr: (sum(rate(publish_requests_total{status!~"5.."}[5m])) / sum(rate(publish_requests_total[5m]))) * 100
+        labels:
+          slo_type: "availability"
+          service: "publishing"
+
+      # Media Pipeline SLO Metrics
+      - record: slo:media_transcode_latency_p90
+        expr: histogram_quantile(0.90, sum by(le)(rate(media_transcode_duration_ms_bucket[10m])))
+        labels:
+          slo_type: "latency"
+          service: "media"
+
+      - record: slo:media_transcode_success_rate
+        expr: (sum(rate(media_transcode_total{status="success"}[10m])) / sum(rate(media_transcode_total[10m]))) * 100
+        labels:
+          slo_type: "availability"
+          service: "media"
+
+      # API Availability SLO
+      - record: slo:api_availability
+        expr: (sum(rate(http_requests_total{status!~"5.."}[5m])) / sum(rate(http_requests_total[5m]))) * 100
+        labels:
+          slo_type: "availability"
+          service: "api"
+
+      # Webhook Processing SLO
+      - record: slo:webhook_processing_latency_p95
+        expr: histogram_quantile(0.95, sum by(le)(rate(webhook_processing_duration_ms_bucket[5m])))
+        labels:
+          slo_type: "latency"
+          service: "webhooks"
+
+      - record: slo:webhook_signature_verification_rate
+        expr: (sum(rate(webhook_signature_verified_total[1m])) / sum(rate(webhook_signature_total[1m]))) * 100
+        labels:
+          slo_type: "security"
+          service: "webhooks"
+
+      # Error Budget Calculations
+      - record: slo:error_budget_remaining_publish_latency
+        expr: max(0, 95 - slo:publish_latency_p95/10000*100)
+        labels:
+          metric: "publish_latency"
+          service: "publishing"
+
+      - record: slo:error_budget_remaining_publish_success
+        expr: max(0, slo:publish_success_rate - 99)
+        labels:
+          metric: "publish_success_rate"
+          service: "publishing"
+
+      - record: slo:error_budget_remaining_api_availability
+        expr: max(0, slo:api_availability - 99.9)
+        labels:
+          metric: "api_availability"
+          service: "api"
+
+  - name: backup_dr_recording_rules
+    interval: 60s
+    rules:
+      # Backup Status Metrics
+      - record: backup:last_success_timestamp
+        expr: max(backup_completion_timestamp{status="success"})
+
+      - record: backup:last_failure_timestamp
+        expr: max(backup_completion_timestamp{status="failed"})
+
+      - record: backup:current_rpo_seconds
+        expr: time() - backup:last_success_timestamp
+
+      - record: backup:success_rate_24h
+        expr: (sum(increase(backup_total{status="success"}[24h])) / sum(increase(backup_total[24h]))) * 100
+
+      # DR Exercise Metrics
+      - record: dr:last_exercise_timestamp
+        expr: max(dr_exercise_completion_timestamp)
+
+      - record: dr:last_rto_ms
+        expr: max(dr_exercise_rto_ms)
+
+      - record: dr:exercises_passed_ratio
+        expr: (sum(increase(dr_exercises_total{result="success"}[30d])) / sum(increase(dr_exercises_total[30d]))) * 100
+
+  - name: gdpr_recording_rules
+    interval: 300s
+    rules:
+      # GDPR Request Processing Metrics
+      - record: gdpr:pending_requests
+        expr: sum(gdpr_requests_total{status="pending"})
+
+      - record: gdpr:oldest_pending_timestamp
+        expr: min(gdpr_request_created_timestamp{status="pending"})
+
+      - record: gdpr:processing_time_p95
+        expr: histogram_quantile(0.95, sum by(le)(rate(gdpr_processing_duration_ms_bucket[24h])))
+
+      - record: gdpr:erasure_success_rate
+        expr: (sum(increase(gdpr_erasure_total{status="success"}[24h])) / sum(increase(gdpr_erasure_total[24h]))) * 100
+
+      - record: gdpr:export_success_rate
+        expr: (sum(increase(gdpr_export_total{status="success"}[24h])) / sum(increase(gdpr_export_total[24h]))) * 100
+
+  - name: performance_recording_rules
+    interval: 30s
+    rules:
+      # HTTP Request Metrics
+      - record: http:request_rate
+        expr: sum(rate(http_requests_total[5m]))
+
+      - record: http:error_rate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m]))
+
+      - record: http:latency_p50
+        expr: histogram_quantile(0.50, sum by(le)(rate(http_request_duration_ms_bucket[5m])))
+
+      - record: http:latency_p95
+        expr: histogram_quantile(0.95, sum by(le)(rate(http_request_duration_ms_bucket[5m])))
+
+      - record: http:latency_p99
+        expr: histogram_quantile(0.99, sum by(le)(rate(http_request_duration_ms_bucket[5m])))
+
+      # Database Performance
+      - record: db:query_rate
+        expr: sum(rate(pg_stat_user_tables_n_tup_ins[5m]) + rate(pg_stat_user_tables_n_tup_upd[5m]) + rate(pg_stat_user_tables_n_tup_del[5m]))
+
+      - record: db:connection_utilization
+        expr: (pg_stat_activity_count / pg_settings_max_connections) * 100
+
+      # Redis Performance
+      - record: redis:hit_rate
+        expr: (rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]))) * 100
+
+      - record: redis:memory_utilization
+        expr: (redis_memory_used_bytes / redis_memory_max_bytes) * 100
+
+  - name: security_recording_rules
+    interval: 60s
+    rules:
+      # Authentication Metrics
+      - record: auth:login_success_rate
+        expr: (sum(rate(auth_login_total{status="success"}[5m])) / sum(rate(auth_login_total[5m]))) * 100
+
+      - record: auth:suspicious_activity_rate
+        expr: sum(rate(auth_login_total{status="failed"}[5m]))
+
+      # Rate Limiting Metrics
+      - record: ratelimit:violation_rate
+        expr: sum(rate(rate_limit_exceeded_total[5m]))
+
+      - record: ratelimit:enforcement_rate
+        expr: (sum(rate(rate_limit_enforced_total[5m])) / sum(rate(http_requests_total[5m]))) * 100
+
+      # Webhook Security
+      - record: webhook:signature_verification_rate
+        expr: (sum(rate(webhook_signature_verified_total[5m])) / sum(rate(webhook_signature_total[5m]))) * 100
+
+  - name: business_recording_rules
+    interval: 300s
+    rules:
+      # Content Publishing Metrics
+      - record: content:publish_rate
+        expr: sum(rate(publish_requests_total{status="success"}[5m]))
+
+      - record: content:platforms_active
+        expr: count(count by(platform)(publish_requests_total))
+
+      - record: content:creators_active
+        expr: count(count by(creator_id)(publish_requests_total))
+
+      # Media Processing Metrics
+      - record: media:processing_rate
+        expr: sum(rate(media_transcode_total{status="success"}[5m]))
+
+      - record: media:storage_utilization_gb
+        expr: sum(s3_bucket_size_bytes) / (1024^3)
+
+      # LLM Usage Metrics
+      - record: llm:request_rate
+        expr: sum(rate(llm_requests_total[5m]))
+
+      - record: llm:cost_per_hour
+        expr: sum(rate(llm_cost_total[1h]))
+
+      - record: llm:budget_utilization
+        expr: (sum(llm_budget_used) / sum(llm_budget_limit)) * 100

@@ -1,0 +1,110 @@
+{
+  "extends": [
+    "@typescript-eslint/recommended",
+    "plugin:security/recommended",
+    "plugin:@typescript-eslint/recommended-requiring-type-checking"
+  ],
+  "plugins": [
+    "@typescript-eslint",
+    "security",
+    "node"
+  ],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module",
+    "project": "./tsconfig.json"
+  },
+  "env": {
+    "node": true,
+    "es2022": true
+  },
+  "rules": {
+    // Security-focused rules
+    "security/detect-object-injection": "error",
+    "security/detect-non-literal-regexp": "error",
+    "security/detect-non-literal-require": "error",
+    "security/detect-non-literal-fs-filename": "error",
+    "security/detect-eval-with-expression": "error",
+    "security/detect-pseudoRandomBytes": "error",
+    "security/detect-possible-timing-attacks": "error",
+    "security/detect-unsafe-regex": "error",
+    "security/detect-buffer-noassert": "error",
+    "security/detect-child-process": "error",
+    "security/detect-disable-mustache-escape": "error",
+    "security/detect-new-buffer": "error",
+    "security/detect-no-csrf-before-method-override": "error",
+    
+    // TypeScript security rules
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/no-unsafe-assignment": "error",
+    "@typescript-eslint/no-unsafe-call": "error",
+    "@typescript-eslint/no-unsafe-member-access": "error",
+    "@typescript-eslint/no-unsafe-return": "error",
+    "@typescript-eslint/no-unsafe-argument": "error",
+    "@typescript-eslint/prefer-readonly": "error",
+    "@typescript-eslint/prefer-readonly-parameter-types": "off", // Too strict for this project
+    
+    // Node.js specific security rules
+    "node/no-deprecated-api": "error",
+    
+    // General security best practices
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-new-func": "error",
+    "no-script-url": "error",
+    "no-proto": "error",
+    "no-iterator": "error",
+    "no-restricted-properties": [
+      "error",
+      {
+        "object": "System",
+        "property": "import",
+        "message": "System.import is deprecated. Use import() instead."
+      }
+    ],
+    "no-restricted-globals": [
+      "error",
+      {
+        "name": "eval",
+        "message": "eval() is dangerous and should not be used."
+      }
+    ],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "CallExpression[callee.name='setTimeout'][arguments.length<2]",
+        "message": "setTimeout must have a delay argument to prevent accidental infinite loops."
+      },
+      {
+        "selector": "CallExpression[callee.name='setInterval'][arguments.length<2]",
+        "message": "setInterval must have a delay argument to prevent accidental infinite loops."
+      }
+    ],
+    
+    // SQL injection prevention
+    "no-template-curly-in-string": "error",
+    
+    // Custom security rules for this project
+    "no-console": "warn", // Log through proper logging system
+    "no-debugger": "error",
+    "no-alert": "error"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.spec.ts"],
+      "rules": {
+        // Relax some rules for test files
+        "@typescript-eslint/no-unsafe-assignment": "warn",
+        "@typescript-eslint/no-unsafe-call": "warn",
+        "@typescript-eslint/no-unsafe-member-access": "warn",
+        "no-console": "off"
+      }
+    }
+  ],
+  "settings": {
+    "node": {
+      "version": ">=18.0.0"
+    }
+  }
+}

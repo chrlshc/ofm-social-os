@@ -1,0 +1,262 @@
+groups:
+  - name: slo_alerts
+    rules:
+      # SLO Breach Alerts
+      - alert: SLOBreachCritical
+        expr: slo_achievement_percentage < 85
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Critical SLO breach for {{ $labels.metric_name }} in {{ $labels.service_name }}"
+          description: "SLO achievement is {{ $value }}% (target: 95%), error budget critically low"
+          runbook_url: "https://docs.internal/runbooks/slo-breach"
+
+      - alert: SLOBreachWarning
+        expr: slo_achievement_percentage < 90 and slo_achievement_percentage >= 85
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Warning SLO breach for {{ $labels.metric_name }} in {{ $labels.service_name }}"
+          description: "SLO achievement is {{ $value }}% (target: 95%), error budget depleting"
+
+      # Error Budget Burn Rate Alerts
+      - alert: ErrorBudgetBurnRateHigh
+        expr: slo_error_budget_remaining < 20
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "High error budget burn rate for {{ $labels.metric_name }}"
+          description: "Only {{ $value }}% error budget remaining for {{ $labels.service_name }}"
+
+      - alert: ErrorBudgetBurnRateMedium
+        expr: slo_error_budget_remaining < 50 and slo_error_budget_remaining >= 20
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Medium error budget burn rate for {{ $labels.metric_name }}"
+          description: "{{ $value }}% error budget remaining for {{ $labels.service_name }}"
+
+      # Publishing SLO Alerts
+      - alert: PublishLatencyHigh
+        expr: histogram_quantile(0.95, sum by(le)(rate(publish_latency_ms_bucket[5m]))) > 10000
+        for: 3m
+        labels:
+          severity: warning
+          team: content
+        annotations:
+          summary: "Publishing latency is high"
+          description: "95th percentile publish latency is {{ $value }}ms (target: <10s)"
+
+      - alert: PublishSuccessRateLow
+        expr: (sum(rate(publish_requests_total{status!~"5.."}[5m])) / sum(rate(publish_requests_total[5m]))) * 100 < 99
+        for: 2m
+        labels:
+          severity: critical
+          team: content
+        annotations:
+          summary: "Publishing success rate is low"
+          description: "Success rate is {{ $value }}% (target: >99%)"
+
+      # Media Pipeline SLO Alerts
+      - alert: MediaTranscodeLatencyHigh
+        expr: histogram_quantile(0.90, sum by(le)(rate(media_transcode_duration_ms_bucket[10m]))) > 300000
+        for: 5m
+        labels:
+          severity: warning
+          team: media
+        annotations:
+          summary: "Media transcoding latency is high"
+          description: "90th percentile transcode time is {{ $value }}ms (target: <5min)"
+
+      # API Availability Alerts
+      - alert: APIAvailabilityLow
+        expr: (sum(rate(http_requests_total{status!~"5.."}[5m])) / sum(rate(http_requests_total[5m]))) * 100 < 99.9
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "API availability is below SLO"
+          description: "API availability is {{ $value }}% (target: >99.9%)"
+
+      # Webhook Signature Errors
+      - alert: WebhookSignatureErrors
+        expr: (sum(rate(webhook_signature_verified_total[1m])) / sum(rate(webhook_signature_total[1m]))) * 100 < 100
+        for: 30s
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Webhook signature verification failures"
+          description: "Signature verification rate is {{ $value }}% (target: 100%)"
+
+  - name: slo_system_health
+    rules:
+      # SLO System Health
+      - alert: SLOSystemDown
+        expr: up{job="slo-manager"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "SLO monitoring system is down"
+          description: "Cannot collect SLO metrics - monitoring blind spot"
+
+      # Missing SLO Data
+      - alert: SLOMeasurementsStale
+        expr: time() - slo_last_measurement_timestamp > 600
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "SLO measurements are stale"
+          description: "No SLO measurements for {{ $labels.metric_name }} in last 10 minutes"
+
+      # High SLO Breach Rate
+      - alert: HighSLOBreachRate
+        expr: rate(slo_breach_total[1h]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High SLO breach rate detected"
+          description: "SLO breach rate is {{ $value }} breaches/hour for {{ $labels.service_name }}"
+
+  - name: backup_dr_alerts
+    rules:
+      # Backup Failure Alerts
+      - alert: BackupFailed
+        expr: backup_status{status="failed"} == 1
+        for: 0m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Backup failed for {{ $labels.backup_type }}"
+          description: "Backup {{ $labels.backup_id }} failed with error"
+          runbook_url: "https://docs.internal/runbooks/backup-failure"
+
+      # Backup Missing/Stale
+      - alert: BackupStale
+        expr: time() - backup_last_success_timestamp > 86400
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Backup is stale - no successful backup in 24h"
+          description: "Last successful backup was {{ $value }} seconds ago"
+
+      # RPO/RTO Violations
+      - alert: RPOViolation
+        expr: backup_rpo_ms > 900000  # 15 minutes
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "RPO violation detected"
+          description: "Current RPO is {{ $value }}ms (target: <15min)"
+
+      - alert: RTOViolation
+        expr: dr_exercise_rto_ms > 1800000  # 30 minutes
+        for: 0m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "RTO violation in DR exercise"
+          description: "DR exercise RTO was {{ $value }}ms (target: <30min)"
+
+      # DR Exercise Overdue
+      - alert: DRExerciseOverdue
+        expr: time() - dr_last_exercise_timestamp > 2678400  # 31 days
+        for: 1h
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "DR exercise is overdue"
+          description: "Last DR exercise was {{ $value }} seconds ago (target: monthly)"
+
+  - name: gdpr_compliance_alerts
+    rules:
+      # GDPR Request Processing
+      - alert: GDPRRequestStale
+        expr: gdpr_pending_requests > 0 and time() - gdpr_oldest_pending_timestamp > 2592000  # 30 days
+        for: 1h
+        labels:
+          severity: critical
+          team: legal
+        annotations:
+          summary: "GDPR request processing is overdue"
+          description: "{{ $value }} GDPR requests pending for >30 days"
+          runbook_url: "https://docs.internal/runbooks/gdpr-compliance"
+
+      # GDPR Erasure Failures
+      - alert: GDPRErasureFailure
+        expr: gdpr_erasure_failures_total > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "GDPR erasure operation failed"
+          description: "{{ $value }} GDPR erasure failures detected"
+
+      # Data Export Failures
+      - alert: GDPRExportFailure
+        expr: gdpr_export_failures_total > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "GDPR data export failed"
+          description: "{{ $value }} GDPR export failures detected"
+
+  - name: security_alerts
+    rules:
+      # Multiple Failed Login Attempts
+      - alert: SuspiciousLoginActivity
+        expr: rate(auth_login_failures_total[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High login failure rate detected"
+          description: "{{ $value }} login failures per second"
+
+      # Webhook Signature Anomalies
+      - alert: WebhookSignatureAnomalies
+        expr: rate(webhook_signature_failures_total[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "High webhook signature failure rate"
+          description: "{{ $value }} signature failures per second - possible attack"
+
+      # Unusual API Usage Patterns
+      - alert: RateLimitExceeded
+        expr: rate(rate_limit_exceeded_total[5m]) > 1
+        for: 3m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High rate limit violation rate"
+          description: "{{ $value }} rate limit violations per second"

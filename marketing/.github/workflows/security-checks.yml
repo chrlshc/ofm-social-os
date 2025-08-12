@@ -1,0 +1,333 @@
+name: Security Checks
+
+on:
+  schedule:
+    # Run security checks daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - 'marketing/backend/api/package*.json'
+      - 'marketing/backend/api/src/**'
+      - '.github/workflows/security-checks.yml'
+
+jobs:
+  dependency-update-check:
+    name: Dependency Update Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Check for Outdated Dependencies
+        working-directory: ./marketing/backend/api
+        run: |
+          npm outdated --json > outdated-deps.json || true
+          
+          # Check if there are critical security updates
+          npm audit --audit-level=critical --json > critical-audit.json || true
+          
+          # Generate summary
+          echo "## Dependency Update Summary" > dependency-summary.md
+          echo "Generated at: $(date)" >> dependency-summary.md
+          
+          if [ -s critical-audit.json ] && [ "$(jq '.vulnerabilities | length' critical-audit.json)" -gt 0 ]; then
+            echo "🚨 **Critical vulnerabilities found!**" >> dependency-summary.md
+            jq -r '.vulnerabilities[] | "- \(.title): \(.severity) severity"' critical-audit.json >> dependency-summary.md
+          else
+            echo "✅ No critical vulnerabilities found" >> dependency-summary.md
+          fi
+
+      - name: Create Security Issue for Critical Vulnerabilities
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Read audit results
+            let criticalVulns = [];
+            try {
+              const audit = JSON.parse(fs.readFileSync('./marketing/backend/api/critical-audit.json', 'utf8'));
+              criticalVulns = Object.values(audit.vulnerabilities || {}).filter(v => v.severity === 'critical');
+            } catch (e) {
+              console.log('No critical vulnerabilities file found');
+            }
+            
+            if (criticalVulns.length > 0) {
+              const title = `🚨 Critical Security Vulnerabilities Detected - ${criticalVulns.length} issues`;
+              const body = `
+              ## Critical Security Vulnerabilities Found
+              
+              **Scan Date**: ${new Date().toISOString()}
+              **Repository**: ${{ github.repository }}
+              **Branch**: ${{ github.ref_name }}
+              
+              ### Vulnerabilities:
+              ${criticalVulns.map(v => `- **${v.title}**: ${v.severity} severity\n  - Package: ${v.via[0]?.name || 'Unknown'}\n  - Fix: ${v.fixAvailable ? 'Available' : 'Not available'}`).join('\n')}
+              
+              ### Action Required:
+              1. Review each vulnerability
+              2. Update affected packages
+              3. Run \`npm audit fix\` if fixes are available
+              4. Test thoroughly before deploying
+              
+              **Priority**: 🔴 HIGH - Address immediately
+              
+              /cc @security-team
+              `;
+              
+              // Check if issue already exists
+              const issues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: 'security,critical-vulnerability',
+                state: 'open'
+              });
+              
+              if (issues.data.length === 0) {
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title,
+                  body,
+                  labels: ['security', 'critical-vulnerability', 'priority-high']
+                });
+              }
+            }
+
+  license-compliance-audit:
+    name: License Compliance Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        working-directory: ./marketing/backend/api
+        run: npm ci
+
+      - name: License Compliance Check
+        working-directory: ./marketing/backend/api
+        run: |
+          # Check for forbidden licenses
+          FORBIDDEN_LICENSES="GPL-2.0;GPL-3.0;AGPL-1.0;AGPL-3.0;CPAL-1.0;EPL-1.0;EPL-2.0"
+          
+          echo "Checking for forbidden licenses..."
+          npx license-checker --excludePrivatePackages --json > all-licenses.json
+          
+          # Extract forbidden licenses
+          jq -r 'to_entries[] | select(.value.licenses | contains("GPL") or contains("AGPL") or contains("CPAL") or contains("EPL")) | "\(.key): \(.value.licenses)"' all-licenses.json > forbidden-licenses.txt || true
+          
+          if [ -s forbidden-licenses.txt ]; then
+            echo "🚨 Forbidden licenses found:"
+            cat forbidden-licenses.txt
+            exit 1
+          else
+            echo "✅ No forbidden licenses found"
+          fi
+          
+          # Generate license report
+          echo "## License Compliance Report" > license-report.md
+          echo "Generated at: $(date)" >> license-report.md
+          echo "" >> license-report.md
+          
+          # Count licenses by type
+          jq -r '.[] | .licenses' all-licenses.json | sort | uniq -c | sort -nr >> license-report.md
+
+      - name: Upload License Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-compliance-report
+          path: ./marketing/backend/api/license-report.md
+
+  security-policy-validation:
+    name: Security Policy Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Security Headers
+        run: |
+          echo "🔍 Validating security policy implementation..."
+          
+          # Check for helmet implementation
+          if ! grep -r "import.*helmet\|require.*helmet" ./marketing/backend/api/src/; then
+            echo "❌ Helmet security middleware not found"
+            echo "HELMET_MISSING=true" >> $GITHUB_ENV
+          else
+            echo "✅ Helmet security middleware found"
+          fi
+          
+          # Check for CORS configuration
+          if ! grep -r "cors" ./marketing/backend/api/src/; then
+            echo "❌ CORS configuration not found"
+            echo "CORS_MISSING=true" >> $GITHUB_ENV
+          else
+            echo "✅ CORS configuration found"
+          fi
+          
+          # Check for rate limiting
+          if ! grep -r "rateLimit\|express-rate-limit" ./marketing/backend/api/src/; then
+            echo "❌ Rate limiting not found"
+            echo "RATE_LIMITING_MISSING=true" >> $GITHUB_ENV
+          else
+            echo "✅ Rate limiting found"
+          fi
+
+      - name: Check Environment Security
+        run: |
+          # Validate .env.example has all required security fields
+          if [ -f "./marketing/backend/api/.env.example" ]; then
+            echo "🔍 Validating .env.example security fields..."
+            
+            REQUIRED_SECURITY_VARS="MASTER_ENCRYPTION_KEY WEBHOOK_SECRET"
+            for var in $REQUIRED_SECURITY_VARS; do
+              if ! grep -q "^$var=" "./marketing/backend/api/.env.example"; then
+                echo "❌ Required security variable $var missing from .env.example"
+                echo "ENV_SECURITY_MISSING=true" >> $GITHUB_ENV
+              else
+                echo "✅ Security variable $var found in .env.example"
+              fi
+            done
+          else
+            echo "❌ .env.example file not found"
+            echo "ENV_EXAMPLE_MISSING=true" >> $GITHUB_ENV
+          fi
+
+      - name: Create Security Policy Issue
+        if: env.HELMET_MISSING == 'true' || env.CORS_MISSING == 'true' || env.RATE_LIMITING_MISSING == 'true' || env.ENV_SECURITY_MISSING == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issues = [];
+            
+            if (process.env.HELMET_MISSING === 'true') {
+              issues.push('- Missing Helmet security middleware');
+            }
+            if (process.env.CORS_MISSING === 'true') {
+              issues.push('- Missing CORS configuration');
+            }
+            if (process.env.RATE_LIMITING_MISSING === 'true') {
+              issues.push('- Missing rate limiting implementation');
+            }
+            if (process.env.ENV_SECURITY_MISSING === 'true') {
+              issues.push('- Missing required security environment variables');
+            }
+            
+            if (issues.length > 0) {
+              const title = '🔒 Security Policy Compliance Issues';
+              const body = `
+              ## Security Policy Compliance Issues
+              
+              **Scan Date**: ${new Date().toISOString()}
+              **Repository**: ${{ github.repository }}
+              
+              ### Issues Found:
+              ${issues.join('\n')}
+              
+              ### Action Required:
+              1. Implement missing security controls
+              2. Update security middleware configuration
+              3. Ensure all security environment variables are documented
+              4. Run security validation tests
+              
+              **Priority**: 🟡 MEDIUM - Address in next sprint
+              
+              /cc @security-team
+              `;
+              
+              // Check if issue already exists
+              const existingIssues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: 'security,policy-compliance',
+                state: 'open'
+              });
+              
+              if (existingIssues.data.length === 0) {
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title,
+                  body,
+                  labels: ['security', 'policy-compliance', 'priority-medium']
+                });
+              }
+            }
+
+  container-security-baseline:
+    name: Container Security Baseline
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Test Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./marketing
+          file: ./marketing/backend/api/Dockerfile
+          push: false
+          tags: ofm-social-test:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Docker Bench Security
+        run: |
+          # Run Docker Bench for Security
+          docker run --rm --net host --pid host --userns host --cap-add audit_control \
+            -e DOCKER_CONTENT_TRUST=$DOCKER_CONTENT_TRUST \
+            -v /etc:/etc:ro \
+            -v /usr/bin/containerd:/usr/bin/containerd:ro \
+            -v /usr/bin/runc:/usr/bin/runc:ro \
+            -v /usr/lib/systemd:/usr/lib/systemd:ro \
+            -v /var/lib:/var/lib:ro \
+            -v /var/run/docker.sock:/var/run/docker.sock:ro \
+            --label docker_bench_security \
+            docker/docker-bench-security > docker-bench-results.txt 2>&1 || true
+
+      - name: CIS Kubernetes Benchmark
+        run: |
+          # Simulate CIS Kubernetes benchmark checks
+          echo "🔍 Running CIS Kubernetes security baseline checks..."
+          
+          # Check for non-root user in Dockerfile
+          if grep -q "USER.*[0-9]" ./marketing/backend/api/Dockerfile; then
+            echo "✅ Non-root user configured in Dockerfile"
+          else
+            echo "❌ Dockerfile should specify non-root user"
+          fi
+          
+          # Check for security context
+          if grep -q "SECURITY\|USER\|RUN.*adduser" ./marketing/backend/api/Dockerfile; then
+            echo "✅ Security context considerations found"
+          else
+            echo "⚠️ Consider adding explicit security context"
+          fi
+
+      - name: Upload Security Baseline Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-security-baseline
+          path: |
+            docker-bench-results.txt
+        if: always()
