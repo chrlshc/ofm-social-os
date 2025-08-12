@@ -23,11 +23,24 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 
+# Setup environment
+cp .env.example .env
+# Edit .env with your configuration
+
 # Run interactive mode
-python main.py
+python main.py interactive
+
+# Analyze a fan
+python main.py analyze --fan-id fan123 --messages '["Hello", "How are you?"]'
+
+# Generate message
+python main.py generate --profile '{"type": "Emotional"}' --phase intrigue
 
 # Run batch processing
-python main.py --mode batch --input example_fans.json
+python main.py batch --input example_fans.json
+
+# Start server mode
+python main.py server --port 8001
 ```
 
 ### 2. Docker Deployment

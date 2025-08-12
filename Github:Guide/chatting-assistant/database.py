@@ -213,6 +213,114 @@ class DatabaseManager:
             logger.error(f"Failed to get conversation history: {e}")
             return []
     
+    def save_compliance_audit(self, fan_id: str, compliance_check: Dict[str, Any], 
+                             manual_send_required: bool = True) -> bool:
+        """Save compliance audit record"""
+        if not self._pool:
+            return False
+        
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    sql = """
+                    INSERT INTO chatting.compliance_audit 
+                    (fan_id, compliance_check, manual_send_required)
+                    VALUES (%s, %s, %s)
+                    """
+                    cur.execute(sql, (fan_id, Json(compliance_check), manual_send_required))
+                    conn.commit()
+                    return True
+        except Exception as e:
+            logger.error(f"Failed to save compliance audit: {e}")
+            return False
+    
+    def get_compliance_history(self, fan_id: str = None, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get compliance audit history"""
+        if not self._pool:
+            return []
+        
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    if fan_id:
+                        sql = """
+                        SELECT * FROM chatting.compliance_audit 
+                        WHERE fan_id = %s 
+                        ORDER BY timestamp DESC 
+                        LIMIT %s
+                        """
+                        cur.execute(sql, (fan_id, limit))
+                    else:
+                        sql = """
+                        SELECT * FROM chatting.compliance_audit 
+                        ORDER BY timestamp DESC 
+                        LIMIT %s
+                        """
+                        cur.execute(sql, (limit,))
+                    
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            logger.error(f"Failed to get compliance history: {e}")
+            return []
+    
+    def mark_message_sent_manually(self, audit_id: str) -> bool:
+        """Mark that a message was sent manually for compliance"""
+        if not self._pool:
+            return False
+        
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    sql = """
+                    UPDATE chatting.compliance_audit 
+                    SET sent_manually = true 
+                    WHERE id = %s
+                    """
+                    cur.execute(sql, (audit_id,))
+                    conn.commit()
+                    return cur.rowcount > 0
+        except Exception as e:
+            logger.error(f"Failed to mark message as sent manually: {e}")
+            return False
+    
+    def get_compliance_stats(self) -> Dict[str, Any]:
+        """Get compliance statistics"""
+        if not self._pool:
+            return {}
+        
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    sql = """
+                    SELECT 
+                        COUNT(*) as total_audits,
+                        COUNT(*) FILTER (WHERE (compliance_check->>'compliant')::boolean = true) as compliant_count,
+                        COUNT(*) FILTER (WHERE manual_send_required = true) as manual_send_required_count,
+                        COUNT(*) FILTER (WHERE sent_manually = true) as sent_manually_count,
+                        AVG(CASE WHEN (compliance_check->'warnings') IS NOT NULL 
+                            THEN jsonb_array_length(compliance_check->'warnings') 
+                            ELSE 0 END) as avg_warnings_per_message
+                    FROM chatting.compliance_audit 
+                    WHERE timestamp >= NOW() - INTERVAL '30 days'
+                    """
+                    cur.execute(sql)
+                    result = cur.fetchone()
+                    
+                    if result:
+                        return {
+                            "total_audits": result[0],
+                            "compliance_rate": result[1] / result[0] if result[0] > 0 else 0,
+                            "manual_send_rate": result[2] / result[0] if result[0] > 0 else 0,
+                            "manual_completion_rate": result[3] / result[2] if result[2] > 0 else 0,
+                            "avg_warnings_per_message": float(result[4]) if result[4] else 0,
+                            "period": "last_30_days"
+                        }
+                    
+                    return {}
+        except Exception as e:
+            logger.error(f"Failed to get compliance stats: {e}")
+            return {}
+
     def save_message_performance(self, fan_type: str, phase: str, 
                                 open_rate: float = None, response_rate: float = None,
                                 conversion_rate: float = None) -> bool:

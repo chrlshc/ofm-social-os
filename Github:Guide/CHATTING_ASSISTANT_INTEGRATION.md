@@ -68,7 +68,7 @@ const execAsync = promisify(exec);
 router.post('/analyze-fan', async (req, res) => {
     const { fanId, messages } = req.body;
     
-    const command = `cd chatting-assistant && python main.py analyze --fan-id ${fanId} --messages '${JSON.stringify(messages)}'`;
+    const command = `cd Github:Guide/chatting-assistant && python main.py analyze --fan-id ${fanId} --messages '${JSON.stringify(messages)}' --output json`;
     const { stdout } = await execAsync(command);
     
     res.json(JSON.parse(stdout));
@@ -77,10 +77,19 @@ router.post('/analyze-fan', async (req, res) => {
 router.post('/generate-message', async (req, res) => {
     const { fanProfile, phase, context } = req.body;
     
-    const command = `cd chatting-assistant && python main.py generate --profile '${JSON.stringify(fanProfile)}' --phase ${phase}`;
-    const { stdout } = await execAsync(command);
+    let command = `cd Github:Guide/chatting-assistant && python main.py generate --profile '${JSON.stringify(fanProfile)}' --phase ${phase} --output json`;
+    if (context) {
+        command += ` --context '${JSON.stringify(context)}'`;
+    }
     
-    res.json({ message: stdout.trim() });
+    const { stdout } = await execAsync(command);
+    const result = JSON.parse(stdout);
+    
+    res.json({
+        message: result.message,
+        compliance: result.compliance,
+        manual_send_required: result.manual_send_required
+    });
 });
 
 export default router;
@@ -132,15 +141,25 @@ Add to existing Temporal workflows:
 import { execSync } from 'child_process';
 
 export async function analyzeFanActivity(fanId: string, messages: string[]): Promise<any> {
-    const command = `cd chatting-assistant && python main.py analyze --fan-id ${fanId} --messages '${JSON.stringify(messages)}'`;
+    const command = `cd Github:Guide/chatting-assistant && python main.py analyze --fan-id ${fanId} --messages '${JSON.stringify(messages)}' --output json`;
     const result = execSync(command, { encoding: 'utf8' });
     return JSON.parse(result);
 }
 
-export async function generatePersonalizedMessage(profile: any, phase: string): Promise<string> {
-    const command = `cd chatting-assistant && python main.py generate --profile '${JSON.stringify(profile)}' --phase ${phase}`;
+export async function generatePersonalizedMessage(profile: any, phase: string, context?: any): Promise<any> {
+    let command = `cd Github:Guide/chatting-assistant && python main.py generate --profile '${JSON.stringify(profile)}' --phase ${phase} --output json`;
+    if (context) {
+        command += ` --context '${JSON.stringify(context)}'`;
+    }
+    
     const result = execSync(command, { encoding: 'utf8' });
-    return result.trim();
+    const parsed = JSON.parse(result);
+    
+    return {
+        message: parsed.message,
+        compliance: parsed.compliance,
+        manual_send_required: parsed.manual_send_required
+    };
 }
 ```
 
@@ -151,13 +170,19 @@ export async function generatePersonalizedMessage(profile: any, phase: string): 
 cd Github:Guide/chatting-assistant
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
+# For French support:
+python -m spacy download fr_core_news_sm
 ```
 
-2. **Update environment variables:**
+2. **Setup environment variables:**
 ```bash
-# Add to .env
-CHATTING_ASSISTANT_PATH=./Github:Guide/chatting-assistant
-CHATTING_ACCOUNT_SIZE=small # or large
+# Copy and configure environment variables
+cp .env.example .env
+# Edit .env with your settings:
+# DATABASE_URL=postgresql://user:pass@localhost:5432/ofm_db
+# CHATTING_ACCOUNT_SIZE=small
+# CHATTING_LANGUAGE=en
+# CHATTING_MANUAL_SEND=true
 ```
 
 3. **Database migration:**
@@ -192,10 +217,19 @@ Update `chatting-assistant/config.json` for your needs:
 ```bash
 # Interactive mode
 cd Github:Guide/chatting-assistant
-python main.py
+python main.py interactive
+
+# Analyze specific fan
+python main.py analyze --fan-id fan123 --messages '["Hey beautiful", "Love your content"]'
+
+# Generate message for fan type
+python main.py generate --profile '{"type": "Emotional", "engagement_level": "high"}' --phase attraction
 
 # Batch processing
-python main.py --mode batch --input fans.json
+python main.py batch --input example_fans.json
+
+# Start HTTP server
+python main.py server --port 8001
 ```
 
 ### API Usage
@@ -203,20 +237,28 @@ python main.py --mode batch --input fans.json
 // Analyze fan
 const analysis = await fetch('/api/chatting/analyze-fan', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
         fanId: 'fan123',
         messages: ['Hey beautiful', 'Love your content']
     })
 });
 
-// Generate message
+// Generate message with compliance check
 const response = await fetch('/api/chatting/generate-message', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-        fanProfile: analysis.profile,
-        phase: 'attraction'
+        fanProfile: { type: "Emotional", engagement_level: "high" },
+        phase: 'attraction',
+        context: { topic: "our conversation", offer_link: "exclusive content" }
     })
 });
+
+const result = await response.json();
+// result.message - the generated message
+// result.compliance - compliance check result
+// result.manual_send_required - true/false
 ```
 
 ## Monitoring

@@ -326,13 +326,32 @@ def main():
         @app.route('/generate', methods=['POST'])
         def api_generate():
             data = request.json
+            fan_id = data.get('fan_id', 'api_user')
             message = bot.generator.generate_message(
                 fan_profile=data['profile'],
                 phase=data['phase'],
                 context=data.get('context', {}),
-                account_size=data.get('account_size', bot.account_size)
+                account_size=data.get('account_size', bot.account_size),
+                fan_id=fan_id
             )
-            return jsonify({"message": message, "manual_send_required": config.is_manual_send_required()})
+            return jsonify(message)
+        
+        @app.route('/compliance/stats', methods=['GET'])
+        def compliance_stats():
+            stats = db.get_compliance_stats()
+            return jsonify(stats)
+        
+        @app.route('/compliance/history', methods=['GET'])
+        def compliance_history():
+            fan_id = request.args.get('fan_id')
+            limit = int(request.args.get('limit', 50))
+            history = db.get_compliance_history(fan_id, limit)
+            return jsonify(history)
+        
+        @app.route('/compliance/mark-sent/<audit_id>', methods=['POST'])
+        def mark_sent(audit_id):
+            success = db.mark_message_sent_manually(audit_id)
+            return jsonify({"success": success})
         
         print(f"Starting server on {args.host}:{args.port}")
         app.run(host=args.host, port=args.port)

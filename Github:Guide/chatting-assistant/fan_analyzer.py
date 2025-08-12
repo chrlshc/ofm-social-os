@@ -27,23 +27,74 @@ class FanAnalyzer:
                 logger.error("No spaCy model available")
                 self.nlp = None
         
-        self.emotional_keywords = {
-            "need", "feel", "heart", "touch", "care", "love", "miss", 
-            "lonely", "special", "connect", "understand", "support",
-            "comfort", "warm", "close", "intimate", "personal"
+        # Load keywords based on language
+        language = config.get_language()
+        self.emotional_keywords, self.conqueror_keywords = self._load_keywords(language)
+        
+        self.engagement_indicators = self._load_engagement_keywords(language)
+    
+    def _load_keywords(self, language: str) -> tuple:
+        """Load personality keywords based on language"""
+        keywords_map = {
+            'en': {
+                'emotional': {
+                    "need", "feel", "heart", "touch", "care", "love", "miss", 
+                    "lonely", "special", "connect", "understand", "support",
+                    "comfort", "warm", "close", "intimate", "personal", "emotional",
+                    "feelings", "soul", "hurt", "pain", "gentle", "soft", "sweet"
+                },
+                'conqueror': {
+                    "best", "top", "vip", "exclusive", "rank", "winner", 
+                    "success", "achieve", "goal", "premium", "elite", "status",
+                    "champion", "leader", "first", "power", "dominate", "control",
+                    "master", "boss", "superior", "dominant", "alpha", "king"
+                }
+            },
+            'fr': {
+                'emotional': {
+                    "besoin", "sentir", "cœur", "coeur", "toucher", "soin", "amour", "manquer",
+                    "seul", "seule", "solitude", "spécial", "spéciale", "connecter", "comprendre", "soutien",
+                    "réconfort", "chaleur", "proche", "intime", "personnel", "personnelle", "émotionnel",
+                    "sentiments", "âme", "ame", "blessé", "blessée", "douleur", "doux", "douce", "tendre"
+                },
+                'conqueror': {
+                    "meilleur", "meilleure", "top", "vip", "exclusif", "exclusive", "rang", "gagnant", "gagnante",
+                    "succès", "réussir", "objectif", "but", "premium", "élite", "elite", "statut", "status",
+                    "champion", "championne", "leader", "chef", "premier", "première", "pouvoir", "dominer",
+                    "contrôle", "maitre", "maître", "boss", "supérieur", "supérieure", "dominant", "dominante", "alpha", "roi", "reine"
+                }
+            }
         }
         
-        self.conqueror_keywords = {
-            "best", "top", "vip", "exclusive", "rank", "winner", 
-            "success", "achieve", "goal", "premium", "elite", "status",
-            "champion", "leader", "first", "power", "dominate"
+        # Get keywords for the specified language, fallback to English
+        lang_keywords = keywords_map.get(language, keywords_map['en'])
+        emotional = lang_keywords['emotional']
+        conqueror = lang_keywords['conqueror']
+        
+        # If language is not English, merge with English keywords for better coverage
+        if language != 'en':
+            emotional.update(keywords_map['en']['emotional'])
+            conqueror.update(keywords_map['en']['conqueror'])
+        
+        return emotional, conqueror
+    
+    def _load_engagement_keywords(self, language: str) -> dict:
+        """Load engagement indicator keywords based on language"""
+        engagement_map = {
+            'en': {
+                "high": ["always", "everyday", "can't wait", "obsessed", "amazing", "incredible", "fantastic", "perfect"],
+                "medium": ["sometimes", "nice", "good", "like", "enjoy", "pretty", "cool"],
+                "low": ["maybe", "perhaps", "okay", "fine", "whatever", "meh", "alright"]
+            },
+            'fr': {
+                "high": ["toujours", "tous les jours", "j'ai hâte", "obsédé", "obsédée", "incroyable", "fantastique", "parfait", "parfaite"],
+                "medium": ["parfois", "sympa", "bien", "j'aime", "j'adore", "plutôt", "cool"],
+                "low": ["peut-être", "peut être", "ok", "ça va", "peu importe", "bof", "correct"]
+            }
         }
         
-        self.engagement_indicators = {
-            "high": ["always", "everyday", "can't wait", "obsessed", "amazing"],
-            "medium": ["sometimes", "nice", "good", "like", "enjoy"],
-            "low": ["maybe", "perhaps", "okay", "fine", "whatever"]
-        }
+        # Get engagement keywords for the specified language, fallback to English
+        return engagement_map.get(language, engagement_map['en'])
     
     def analyze_personality_type(self, messages: List[str]) -> Dict[str, any]:
         """
