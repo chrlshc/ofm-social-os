@@ -1,0 +1,123 @@
+{
+  "account_settings": {
+    "small_account": {
+      "daily_fans": 50,
+      "focus": "relationship_building",
+      "message_frequency": "high_touch",
+      "pricing_strategy": "test_and_learn"
+    },
+    "large_account": {
+      "daily_fans": 200,
+      "focus": "efficiency",
+      "message_frequency": "automated_sequences",
+      "pricing_strategy": "premium_positioning"
+    }
+  },
+  
+  "iras_phases": {
+    "intrigue": {
+      "duration_messages": [1, 2],
+      "objectives": ["capture_attention", "create_curiosity"],
+      "techniques": ["questions", "teasers", "mystery"]
+    },
+    "rapport": {
+      "duration_messages": [3, 5],
+      "objectives": ["build_trust", "find_commonalities"],
+      "techniques": ["active_listening", "mirroring", "validation"]
+    },
+    "attraction": {
+      "duration_messages": [6, 10],
+      "objectives": ["create_desire", "showcase_value"],
+      "techniques": ["exclusive_offers", "scarcity", "social_proof"]
+    },
+    "submission": {
+      "duration_messages": [11, null],
+      "objectives": ["deepen_commitment", "maximize_ltv"],
+      "techniques": ["future_pacing", "loyalty_rewards", "personalization"]
+    }
+  },
+  
+  "pricing_tiers": {
+    "entry": {
+      "ppv_range": [5, 15],
+      "tip_suggestions": [5, 10, 20],
+      "bundle_discount": 0.1
+    },
+    "mid": {
+      "ppv_range": [15, 50],
+      "tip_suggestions": [20, 50, 100],
+      "bundle_discount": 0.15
+    },
+    "premium": {
+      "ppv_range": [50, 200],
+      "tip_suggestions": [100, 200, 500],
+      "bundle_discount": 0.2
+    }
+  },
+  
+  "message_timing": {
+    "optimal_hours": {
+      "weekday": ["12:00", "19:00", "22:00"],
+      "weekend": ["14:00", "20:00", "23:00"]
+    },
+    "response_delays": {
+      "immediate": [0, 5],
+      "natural": [5, 30],
+      "busy": [30, 120]
+    }
+  },
+  
+  "content_categories": {
+    "photo_set": {
+      "emotional_appeal": "intimate and personal",
+      "conqueror_appeal": "exclusive and premium"
+    },
+    "video": {
+      "emotional_appeal": "connection and intimacy",
+      "conqueror_appeal": "rare and valuable"
+    },
+    "custom": {
+      "emotional_appeal": "made just for you",
+      "conqueror_appeal": "one-of-a-kind trophy"
+    },
+    "sexting": {
+      "emotional_appeal": "personal attention",
+      "conqueror_appeal": "VIP experience"
+    }
+  },
+  
+  "emoji_usage": {
+    "emotional": {
+      "positive": ["💕", "💖", "🌹", "😊", "🥰", "💗", "✨"],
+      "teasing": ["😘", "😉", "💋", "🙈"],
+      "special": ["🎁", "💝", "🌟"]
+    },
+    "conqueror": {
+      "power": ["👑", "🏆", "💪", "🔥"],
+      "exclusive": ["💎", "🎯", "⚡", "🚀"],
+      "status": ["🥇", "👑", "🏅", "💰"]
+    }
+  },
+  
+  "compliance_settings": {
+    "manual_send_required": true,
+    "ai_disclosure": false,
+    "content_guidelines": {
+      "no_automated_sending": true,
+      "human_review_required": true,
+      "respect_platform_tos": true
+    }
+  },
+  
+  "analytics_tracking": {
+    "metrics": [
+      "response_rate",
+      "conversion_rate",
+      "average_spend",
+      "fan_lifetime_value",
+      "churn_rate"
+    ],
+    "report_frequency": "daily",
+    "export_format": "json"
+  }
+}

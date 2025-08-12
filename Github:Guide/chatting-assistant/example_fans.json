@@ -1,0 +1,29 @@
+[
+  {
+    "id": "fan_emotional_001",
+    "messages": [
+      "Hi! I've been following you for a while now",
+      "Your content really speaks to me on a personal level",
+      "I feel like you understand what I'm going through",
+      "Sometimes I just need someone to talk to"
+    ]
+  },
+  {
+    "id": "fan_conqueror_001", 
+    "messages": [
+      "Just subscribed - show me your best content",
+      "I'm looking for VIP treatment here",
+      "What exclusive stuff do you have that others don't get?",
+      "I want to be your #1 fan"
+    ]
+  },
+  {
+    "id": "fan_mixed_001",
+    "messages": [
+      "Hey there! Love your work",
+      "You're the best creator on this platform",
+      "Can you do something special just for me?",
+      "I've been supporting you since day one"
+    ]
+  }
+]
