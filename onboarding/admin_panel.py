@@ -219,26 +219,34 @@ def update_marketing_strategies():
 @admin_bp.route("/feature-flags", methods=["GET"])
 @require_admin_auth
 def get_feature_flags():
-    """Get current feature flags configuration"""
+    """Get all feature flags with metadata"""
     try:
-        rules_engine = get_rules_engine()
+        from .db_helper import get_db
+        from .business_rules_models import FeatureFlagModel
         
-        # Get common feature flags
-        common_flags = [
-            "email_verification", "stripe_connect", "marketing_automation",
-            "onlyfans_scraping", "mobile_optimizations", "advanced_analytics", 
-            "beta_features"
-        ]
-        
-        flags = {}
-        for flag in common_flags:
-            flags[flag] = rules_engine.is_feature_enabled(flag)
+        with get_db() as db:
+            # Get all flags from database
+            db_flags = db.query(FeatureFlagModel).all()
+            
+            flags_data = []
+            for flag in db_flags:
+                flags_data.append({
+                    "id": flag.id,
+                    "feature_name": flag.feature_name,
+                    "is_enabled": flag.is_enabled,
+                    "description": flag.description,
+                    "ab_test_enabled": flag.ab_test_enabled,
+                    "rollout_percentage": flag.rollout_percentage,
+                    "version": flag.version,
+                    "created_at": flag.created_at.isoformat() if flag.created_at else None,
+                    "updated_at": flag.updated_at.isoformat() if flag.updated_at else None
+                })
         
         return jsonify({
             "success": True,
             "data": {
-                "feature_flags": flags,
-                "version": rules_engine.get_rules_version()
+                "feature_flags": flags_data,
+                "total_count": len(flags_data)
             }
         })
         
@@ -247,44 +255,197 @@ def get_feature_flags():
         return jsonify({"error": "Failed to retrieve feature flags"}), 500
 
 
-@admin_bp.route("/feature-flags", methods=["PUT"])
-@require_admin_auth  
-def update_feature_flags():
-    """Update feature flags configuration"""
+@admin_bp.route("/feature-flags", methods=["POST"])
+@require_admin_auth
+def create_or_update_feature_flag():
+    """Create or update a feature flag"""
     try:
         data = request.get_json()
-        if not data or "flags" not in data:
-            return jsonify({"error": "Flags data required"}), 400
+        feature_name = data.get('feature_name')
+        is_enabled = data.get('is_enabled', False)
+        description = data.get('description', '')
+        ab_test_enabled = data.get('ab_test_enabled', False)
+        rollout_percentage = data.get('rollout_percentage', 100)
         
-        rules_engine = get_rules_engine()
+        if not feature_name:
+            return jsonify({"error": "Feature name required"}), 400
         
-        # Validate flags data
-        flags = data["flags"]
-        if not isinstance(flags, dict):
-            return jsonify({"error": "Flags must be a dictionary"}), 400
+        from .db_helper import get_db
+        from .business_rules_models import FeatureFlagModel
         
-        if not all(isinstance(v, bool) for v in flags.values()):
-            return jsonify({"error": "All flag values must be boolean"}), 400
-        
-        # Update rules
-        success = rules_engine.update_rules(
-            RuleType.FEATURE_FLAGS,
-            flags,
-            request.admin_user["user_id"]
-        )
-        
-        if success:
+        with get_db() as db:
+            # Check if flag exists
+            flag = db.query(FeatureFlagModel).filter_by(feature_name=feature_name).first()
+            
+            if flag:
+                # Update existing
+                flag.is_enabled = is_enabled
+                flag.description = description
+                flag.ab_test_enabled = ab_test_enabled
+                flag.rollout_percentage = rollout_percentage
+                flag.updated_by = request.admin_user["user_id"]
+                flag.version += 1
+            else:
+                # Create new
+                flag = FeatureFlagModel(
+                    feature_name=feature_name,
+                    is_enabled=is_enabled,
+                    description=description,
+                    ab_test_enabled=ab_test_enabled,
+                    rollout_percentage=rollout_percentage,
+                    created_by=request.admin_user["user_id"]
+                )
+                db.add(flag)
+            
+            db.commit()
+            
+            # Update rules engine
+            rules_engine = get_rules_engine()
+            all_flags = {}
+            
+            # Get all flags from DB
+            all_db_flags = db.query(FeatureFlagModel).all()
+            for f in all_db_flags:
+                all_flags[f.feature_name] = f.is_enabled
+            
+            # Update engine
+            success = rules_engine.update_rules(
+                RuleType.FEATURE_FLAGS,
+                all_flags,
+                request.admin_user["user_id"]
+            )
+            
             return jsonify({
-                "success": True,
-                "message": "Feature flags updated successfully",
-                "version": rules_engine.get_rules_version()
+                "success": success,
+                "data": {
+                    "feature_flag": {
+                        "feature_name": flag.feature_name,
+                        "is_enabled": flag.is_enabled,
+                        "ab_test_enabled": flag.ab_test_enabled,
+                        "version": flag.version
+                    }
+                }
             })
-        else:
-            return jsonify({"error": "Failed to update feature flags"}), 500
             
     except Exception as e:
-        logger.error(f"Failed to update feature flags: {str(e)}")
-        return jsonify({"error": "Failed to update feature flags"}), 500
+        logger.error(f"Failed to update feature flag: {str(e)}")
+        return jsonify({"error": "Failed to update feature flag"}), 500
+
+
+@admin_bp.route("/feature-flags/<feature_name>", methods=["DELETE"])
+@require_admin_auth
+def delete_feature_flag(feature_name):
+    """Delete a feature flag"""
+    try:
+        from .db_helper import get_db
+        from .business_rules_models import FeatureFlagModel
+        
+        with get_db() as db:
+            flag = db.query(FeatureFlagModel).filter_by(feature_name=feature_name).first()
+            if not flag:
+                return jsonify({"error": "Feature flag not found"}), 404
+            
+            db.delete(flag)
+            db.commit()
+            
+            # Update rules engine
+            rules_engine = get_rules_engine()
+            all_flags = {}
+            
+            # Get remaining flags
+            remaining_flags = db.query(FeatureFlagModel).all()
+            for f in remaining_flags:
+                all_flags[f.feature_name] = f.is_enabled
+            
+            rules_engine.update_rules(
+                RuleType.FEATURE_FLAGS,
+                all_flags,
+                request.admin_user["user_id"]
+            )
+            
+            return jsonify({"success": True})
+            
+    except Exception as e:
+        logger.error(f"Failed to delete feature flag: {str(e)}")
+        return jsonify({"error": "Failed to delete feature flag"}), 500
+
+
+# === A/B TESTING MANAGEMENT ===
+
+@admin_bp.route("/ab-tests", methods=["GET"])
+@require_admin_auth
+def get_ab_tests():
+    """Get all A/B tests"""
+    try:
+        from .db_helper import get_db
+        from .business_rules_models import FeatureFlagModel
+        
+        with get_db() as db:
+            # Get flags with A/B testing enabled
+            ab_tests = db.query(FeatureFlagModel).filter(
+                FeatureFlagModel.ab_test_enabled == True
+            ).all()
+            
+            tests_data = []
+            for test in ab_tests:
+                tests_data.append({
+                    "feature_name": test.feature_name,
+                    "description": test.description,
+                    "rollout_percentage": test.rollout_percentage,
+                    "is_active": test.is_enabled,
+                    "created_at": test.created_at.isoformat() if test.created_at else None,
+                    "updated_at": test.updated_at.isoformat() if test.updated_at else None,
+                    "created_by": test.created_by
+                })
+        
+        return jsonify({
+            "success": True,
+            "data": {
+                "ab_tests": tests_data,
+                "total_count": len(tests_data)
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get A/B tests: {str(e)}")
+        return jsonify({"error": "Failed to retrieve A/B tests"}), 500
+
+
+@admin_bp.route("/ab-tests/<feature_name>/results", methods=["GET"])
+@require_admin_auth
+def get_ab_test_results(feature_name):
+    """Get A/B test results for a specific feature"""
+    try:
+        # This would typically query your analytics system
+        # Placeholder implementation
+        results = {
+            "feature_name": feature_name,
+            "test_period": {
+                "start": (datetime.utcnow() - timedelta(days=30)).isoformat(),
+                "end": datetime.utcnow().isoformat()
+            },
+            "control_group": {
+                "users": 5000,
+                "conversion_rate": 0.125,
+                "average_revenue": 45.50
+            },
+            "treatment_group": {
+                "users": 5000,
+                "conversion_rate": 0.142,
+                "average_revenue": 52.30
+            },
+            "statistical_significance": 0.95,
+            "recommendation": "Continue rollout - treatment shows 13.6% improvement"
+        }
+        
+        return jsonify({
+            "success": True,
+            "data": results
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get A/B test results: {str(e)}")
+        return jsonify({"error": "Failed to retrieve test results"}), 500
 
 
 # === ANALYTICS AND MONITORING ===

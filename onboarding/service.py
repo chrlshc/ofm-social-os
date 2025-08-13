@@ -28,6 +28,7 @@ from .tokens import EmailTokenService
 from .stripe_connect import StripeConnectService, StripeConnectError
 from .emailer import EmailService
 from .business_rules import get_rules_engine, RuleType
+from .validators import ProfileValidator
 
 logger = logging.getLogger(__name__)
 
@@ -551,3 +552,71 @@ class OnboardingService:
             logger.warning("Marketing automation tasks not available - implement task queue")
         except Exception as e:
             logger.error(f"Failed to schedule marketing tasks for user {user_id}: {str(e)}")
+    
+    def complete_profile(self, db: Session, user_id: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Complete creator profile with validated data
+        
+        Args:
+            db: Database session
+            user_id: User ID
+            profile_data: Profile data containing public_name, description, etc.
+            
+        Returns:
+            Dict with completion status and any errors
+            
+        Raises:
+            ValueError: If validation fails
+        """
+        try:
+            # Extract fields
+            public_name = profile_data.get('public_name', '').strip()
+            description = profile_data.get('description', '').strip()
+            
+            # Validate profile data
+            is_valid, error_msg, sanitized_data = ProfileValidator.validate_profile_completion(
+                public_name=public_name,
+                description=description
+            )
+            
+            if not is_valid:
+                raise ValueError(error_msg)
+            
+            # Update profile
+            profile = db.query(CreatorProfile).filter_by(user_id=user_id).first()
+            if not profile:
+                raise ValueError("Creator profile not found")
+            
+            # Update with sanitized data
+            profile.public_name = sanitized_data['public_name']
+            profile.description = sanitized_data['description']
+            profile.updated_at = datetime.utcnow()
+            
+            db.commit()
+            
+            logger.info(f"Profile completed for user {user_id}")
+            
+            return {
+                "success": True,
+                "profile": {
+                    "public_name": profile.public_name,
+                    "description": profile.description,
+                    "account_size": profile.account_size,
+                    "pricing_tier": profile.pricing_tier
+                }
+            }
+            
+        except ValueError as e:
+            db.rollback()
+            logger.error(f"Profile validation failed for user {user_id}: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Profile completion failed for user {user_id}: {str(e)}")
+            return {
+                "success": False,
+                "error": "Failed to complete profile"
+            }

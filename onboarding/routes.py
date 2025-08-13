@@ -680,6 +680,178 @@ def stripe_webhook():
         return error_response("Webhook processing failed", 500)
 
 
+# === ONLYFANS QUESTIONNAIRE ROUTES ===
+
+@bp.route("/onlyfans/questionnaire", methods=["POST"])
+@require_auth(["creator"])
+def submit_onlyfans_questionnaire():
+    """
+    Submit OnlyFans statistics via manual questionnaire
+    
+    Body:
+        follower_count: int - Number of followers
+        subscription_price: float - Monthly subscription price
+        average_tip_amount: float - Average tip amount
+        posts_per_week: int - Number of posts per week
+        content_categories: List[str] - Content categories
+        ppv_messages_per_month: int - Pay-per-view messages per month (optional)
+        average_ppv_price: float - Average PPV price (optional)
+        months_active: int - Months active on platform (optional)
+        daily_new_fans: int - Average new fans per day (optional)
+        churn_rate_percent: float - Monthly churn rate (optional)
+        
+    Returns:
+        200: Analysis results with recommendations
+        400: Invalid questionnaire data
+    """
+    try:
+        from .onlyfans_questionnaire import OnlyFansQuestionnaire
+        
+        data = request.get_json()
+        if not data:
+            return error_response("Request body required")
+        
+        # Validate questionnaire
+        is_valid, error_msg = OnlyFansQuestionnaire.validate_questionnaire(data)
+        if not is_valid:
+            return error_response(error_msg, 400)
+        
+        # Analyze data
+        analysis_results = OnlyFansQuestionnaire.analyze_from_questionnaire(data)
+        
+        # Update creator profile with results
+        with get_db_session() as db:
+            from .models import CreatorProfile
+            
+            profile = db.query(CreatorProfile).filter_by(user_id=request.user_id).first()
+            if profile:
+                profile.account_size = analysis_results["account_size"]
+                profile.pricing_tier = analysis_results["pricing_tier"]
+                profile.content_categories = analysis_results["content_categories"]
+                db.commit()
+                
+                logger.info(f"Updated profile from questionnaire for user {request.user_id}")
+            
+        return success_response(analysis_results, "Questionnaire analyzed successfully")
+        
+    except ValueError as e:
+        return error_response(str(e), 400)
+    except Exception as e:
+        logger.error(f"Questionnaire submission failed: {str(e)}")
+        return error_response("Failed to process questionnaire", 500)
+
+
+@bp.route("/profile/complete", methods=["POST"])
+@require_auth(["creator"])
+def complete_profile():
+    """
+    Complete creator profile with public name and description
+    
+    Body:
+        public_name: str - Public display name (required, 2-100 chars)
+        description: str - Profile description (optional, max 500 chars)
+        
+    Returns:
+        200: Profile updated successfully
+        400: Validation errors
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return error_response("Request body required")
+        
+        with get_db_session() as db:
+            result = onboarding_service.complete_profile(db, request.user_id, data)
+            
+            if result["success"]:
+                return success_response(result["profile"], "Profile completed successfully")
+            else:
+                return error_response(result["error"], 400)
+                
+    except Exception as e:
+        logger.error(f"Profile completion failed: {str(e)}")
+        return error_response("Failed to complete profile", 500)
+
+
+@bp.route("/onlyfans/questionnaire/template", methods=["GET"])
+@require_auth(["creator"])
+def get_questionnaire_template():
+    """
+    Get questionnaire template with field descriptions
+    
+    Returns:
+        200: Questionnaire template and metadata
+    """
+    try:
+        from .onlyfans_questionnaire import OnlyFansQuestionnaire
+        
+        template = {
+            "required_fields": {
+                "follower_count": {
+                    "type": "integer",
+                    "description": "Nombre total d'abonnés",
+                    "min": 0,
+                    "max": 10000000
+                },
+                "subscription_price": {
+                    "type": "float",
+                    "description": "Prix d'abonnement mensuel en USD",
+                    "min": 0,
+                    "max": 200
+                },
+                "average_tip_amount": {
+                    "type": "float",
+                    "description": "Montant moyen des pourboires reçus",
+                    "min": 0
+                },
+                "posts_per_week": {
+                    "type": "integer",
+                    "description": "Nombre de posts par semaine",
+                    "min": 0,
+                    "max": 100
+                },
+                "content_categories": {
+                    "type": "array",
+                    "description": "Catégories de contenu",
+                    "allowed_values": list(OnlyFansQuestionnaire.VALID_CATEGORIES)
+                }
+            },
+            "optional_fields": {
+                "ppv_messages_per_month": {
+                    "type": "integer",
+                    "description": "Messages payants par mois",
+                    "default": 0
+                },
+                "average_ppv_price": {
+                    "type": "float",
+                    "description": "Prix moyen des messages payants",
+                    "default": 0
+                },
+                "months_active": {
+                    "type": "integer",
+                    "description": "Mois d'activité sur OnlyFans",
+                    "default": 0
+                },
+                "daily_new_fans": {
+                    "type": "integer",
+                    "description": "Nouveaux fans par jour en moyenne",
+                    "default": 0
+                },
+                "churn_rate_percent": {
+                    "type": "float",
+                    "description": "Taux de désabonnement mensuel (%)",
+                    "default": 5.0
+                }
+            }
+        }
+        
+        return success_response(template, "Questionnaire template retrieved")
+        
+    except Exception as e:
+        logger.error(f"Failed to get questionnaire template: {str(e)}")
+        return error_response("Failed to retrieve template", 500)
+
+
 # === ERROR HANDLERS ===
 
 @bp.errorhandler(404)
