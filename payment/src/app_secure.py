@@ -25,6 +25,9 @@ from .security import (
     WebhookSecurity, SecurityUtils, get_rate_limiter, 
     require_secure_webhook, audit_log, setup_secure_cors, setup_security_headers
 )
+from .user_management import user_service, init_default_users
+from .error_handling import setup_error_handlers, PaymentAPIError, ErrorCode, raise_not_found_error, raise_validation_error
+from .stripe_connect_manager import init_stripe_connect_manager, connect_manager
 
 # Chargement des variables d'environnement
 load_dotenv()
@@ -104,11 +107,14 @@ logger = logging.getLogger(__name__)
 # Masquer les informations sensibles dans les logs
 logging.getLogger('stripe').setLevel(logging.WARNING)
 
-# Initialisation de la base de données et de l'authentification
+# Initialisation de tous les services
 with app.app_context():
     init_database(app)
     init_auth(app)
+    init_stripe_connect_manager(app)
     create_auth_endpoints(app)
+    setup_error_handlers(app)
+    init_default_users()  # Créer les utilisateurs par défaut
 
 
 # Middleware de sécurité pour masquer les données sensibles

@@ -280,50 +280,69 @@ def require_creator_access(creator_id_param: str = 'creator_id'):
 
 # Endpoints d'authentification
 def create_auth_endpoints(app):
-    """Crée les endpoints d'authentification."""
+    """Crée les endpoints d'authentification avec gestion complète des utilisateurs."""
     
     @app.route('/auth/login', methods=['POST'])
     def login():
         """
-        Endpoint de connexion.
+        Endpoint de connexion avec vérification réelle des identifiants.
         
         Body:
         {
             "email": "user@example.com",
-            "password": "password",
-            "role": "creator"  // optionnel
+            "password": "password"
         }
         """
+        from .user_management import user_service
+        from .security import SecurityUtils
+        
         data = request.get_json()
         if not data or not data.get('email') or not data.get('password'):
             return jsonify({
                 'error': 'Email et mot de passe requis'
             }), 400
         
-        # TODO: Vérifier les credentials dans la base de données
-        # Pour l'instant, simulation
-        email = data['email']
-        password = data['password']
-        role = data.get('role', 'user')
+        # Sanitization des entrées
+        email = SecurityUtils.sanitize_input(data['email'])
+        password = data['password']  # Ne pas sanitizer le mot de passe
         
-        # Simulation d'une vérification (à remplacer par une vraie vérification DB)
-        if password != 'demo_password':  # À remplacer par hash bcrypt
+        # Authentification réelle
+        success, user, error_message = user_service.authenticate_user(email, password)
+        
+        if not success:
+            # Log de la tentative d'intrusion
+            logger.warning(
+                f"Tentative de connexion échouée pour {email} depuis {request.remote_addr}"
+            )
             return jsonify({
-                'error': 'Identifiants invalides'
+                'error': error_message or 'Identifiants invalides'
             }), 401
         
-        # Génération des tokens
-        user_id = f"user_{email.split('@')[0]}"  # À remplacer par ID réel de DB
-        tokens = auth_service.generate_tokens(user_id, role)
+        # Génération des tokens avec claims additionnels
+        additional_claims = {
+            'email': user.email,
+            'email_verified': user.email_verified,
+            'last_login': user.last_login_at.isoformat() if user.last_login_at else None
+        }
         
-        logger.info(f"Connexion réussie pour {email} avec rôle {role}")
+        tokens = auth_service.generate_tokens(
+            user_id=user.id,
+            role=user.role.value,
+            additional_claims=additional_claims
+        )
+        
+        logger.info(f"Connexion réussie pour {user.email} ({user.id}) avec rôle {user.role.value}")
         
         return jsonify({
             **tokens,
             'user': {
-                'id': user_id,
-                'email': email,
-                'role': role
+                'id': user.id,
+                'email': user.email,
+                'role': user.role.value,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'email_verified': user.email_verified,
+                'status': user.status.value
             }
         }), 200
     
@@ -355,13 +374,147 @@ def create_auth_endpoints(app):
     @app.route('/auth/verify', methods=['GET'])
     @require_auth()
     def verify():
-        """Endpoint pour vérifier la validité d'un token."""
+        """Endpoint pour vérifier la validité d'un token et récupérer les infos utilisateur."""
+        from .user_management import user_service
+        
+        # Récupération des informations utilisateur à jour
+        user = user_service.get_user_by_id(request.user_id)
+        if not user:
+            return jsonify({
+                'error': 'Utilisateur non trouvé'
+            }), 404
+        
         return jsonify({
             'valid': True,
-            'user_id': request.user_id,
-            'role': request.user_role,
-            'claims': request.auth_claims
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'role': user.role.value,
+                'status': user.status.value,
+                'email_verified': user.email_verified,
+                'first_name': user.first_name,
+                'last_name': user.last_name
+            },
+            'token_claims': {
+                'issued_at': request.auth_claims.get('iat'),
+                'expires_at': request.auth_claims.get('exp')
+            }
         }), 200
+    
+    @app.route('/auth/register', methods=['POST'])
+    def register():
+        """
+        Endpoint d'inscription d'un nouvel utilisateur.
+        
+        Body:
+        {
+            "email": "user@example.com",
+            "password": "SecureP@ssw0rd123",
+            "first_name": "John",
+            "last_name": "Doe",
+            "role": "user"  // optionnel, par défaut "user"
+        }
+        """
+        from .user_management import user_service, UserRole
+        from .security import SecurityUtils
+        
+        data = request.get_json()
+        if not data or not data.get('email') or not data.get('password'):
+            return jsonify({
+                'error': 'Email et mot de passe requis'
+            }), 400
+        
+        try:
+            # Validation du rôle
+            role_str = data.get('role', 'user').lower()
+            if role_str == 'admin':
+                # Seuls les admins existants peuvent créer d'autres admins
+                return jsonify({
+                    'error': 'Création de compte admin non autorisée'
+                }), 403
+            
+            role = UserRole.CREATOR if role_str == 'creator' else UserRole.USER
+            
+            # Création de l'utilisateur
+            user = user_service.create_user(
+                email=data['email'],
+                password=data['password'],
+                role=role,
+                first_name=data.get('first_name'),
+                last_name=data.get('last_name')
+            )
+            
+            logger.info(f"Nouvel utilisateur créé: {user.email} ({user.id}) avec rôle {role.value}")
+            
+            return jsonify({
+                'success': True,
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'role': user.role.value,
+                    'status': user.status.value
+                },
+                'message': 'Compte créé avec succès. Vérification d\'email requise.'
+            }), 201
+            
+        except ValueError as e:
+            return jsonify({
+                'error': str(e)
+            }), 400
+        except Exception as e:
+            logger.error(f"Erreur lors de la création d'utilisateur: {e}")
+            return jsonify({
+                'error': 'Erreur lors de la création du compte'
+            }), 500
+    
+    @app.route('/auth/change-password', methods=['POST'])
+    @require_auth()
+    def change_password():
+        """
+        Endpoint pour changer le mot de passe.
+        
+        Body:
+        {
+            "old_password": "current_password",
+            "new_password": "new_secure_password"
+        }
+        """
+        from .user_management import user_service
+        
+        data = request.get_json()
+        if not data or not data.get('old_password') or not data.get('new_password'):
+            return jsonify({
+                'error': 'Ancien et nouveau mot de passe requis'
+            }), 400
+        
+        try:
+            success = user_service.update_password(
+                user_id=request.user_id,
+                old_password=data['old_password'],
+                new_password=data['new_password']
+            )
+            
+            if not success:
+                return jsonify({
+                    'error': 'Ancien mot de passe incorrect'
+                }), 400
+            
+            logger.info(f"Mot de passe changé pour l'utilisateur: {request.user_id}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Mot de passe mis à jour avec succès'
+            }), 200
+            
+        except ValueError as e:
+            return jsonify({
+                'error': str(e)
+            }), 400
+        except Exception as e:
+            logger.error(f"Erreur lors du changement de mot de passe: {e}")
+            return jsonify({
+                'error': 'Erreur lors de la mise à jour du mot de passe'
+            }), 500
 
 
 if __name__ == "__main__":
