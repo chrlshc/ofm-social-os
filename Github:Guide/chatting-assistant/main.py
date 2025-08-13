@@ -13,6 +13,7 @@ from message_generator import MessageGenerator
 from config_manager import config
 from database import db
 from compliance import compliance
+from fan_history_tracker import fan_tracker
 
 init(autoreset=True)
 
@@ -56,11 +57,21 @@ class OnlyFansChatBot:
             phase=phase,
             context=context,
             account_size=self.account_size,
-            fan_id=fan_id
+            fan_id=fan_id,
+            messages=messages
         )
         
         # Save to database
         db.save_fan_profile(fan_id, fan_profile)
+        
+        # Track interaction in history tracker
+        interaction_data = {
+            'message_sent': response["message"],
+            'message_received': messages[-1] if messages else None,
+            'phase': phase,
+            'interaction_type': 'message_generation'
+        }
+        fan_tracker.track_interaction(fan_id, interaction_data)
         
         # Store in memory for session
         self.conversations[fan_id] = {
@@ -69,7 +80,8 @@ class OnlyFansChatBot:
             "interests": interests,
             "spending_potential": spending_potential,
             "last_interaction": datetime.now().isoformat(),
-            "last_response": response
+            "last_response": response,
+            "analytics": fan_tracker.get_fan_analytics(fan_id)
         }
         
         return {
@@ -241,18 +253,49 @@ def generate_command(args):
         except json.JSONDecodeError:
             pass
     
-    message = bot.generator.generate_message(
+    message_result = bot.generator.generate_message(
         fan_profile=profile,
         phase=args.phase,
         context=context,
-        account_size=args.account_size or bot.account_size
+        account_size=args.account_size or bot.account_size,
+        fan_id=args.fan_id
     )
     
+    # Handle clipboard copying
+    if args.copy:
+        try:
+            import pyperclip
+            pyperclip.copy(message_result["message"])
+            print(f"{Fore.GREEN}✅ Message copied to clipboard!{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}📋 Paste it in OnlyFans and send manually{Style.RESET_ALL}")
+        except ImportError:
+            print(f"{Fore.RED}❌ pyperclip not installed. Install with: pip install pyperclip{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}❌ Failed to copy to clipboard: {e}{Style.RESET_ALL}")
+    
     if args.output == "json":
-        print(json.dumps({"message": message}))
+        print(json.dumps(message_result))
     else:
         print(f"\n{Fore.CYAN}Generated Message:{Style.RESET_ALL}")
-        print(message)
+        print(message_result["message"])
+        
+        # Show compliance info
+        compliance = message_result.get("compliance", {})
+        if compliance.get("compliant"):
+            print(f"\n{Fore.GREEN}✅ Compliance: Message approved{Style.RESET_ALL}")
+        else:
+            print(f"\n{Fore.YELLOW}⚠️  Compliance warnings:{Style.RESET_ALL}")
+            for warning in compliance.get("warnings", []):
+                print(f"  - {warning}")
+        
+        if message_result.get("manual_send_required"):
+            print(f"\n{Fore.CYAN}📝 Manual send required - paste in OnlyFans{Style.RESET_ALL}")
+            
+        if args.fan_id:
+            print(f"\n{Fore.MAGENTA}🔍 Fan ID: {args.fan_id}{Style.RESET_ALL}")
+            print(f"Personality: {message_result.get('personality_type', 'Unknown')}")
+            if message_result.get('ml_enhanced'):
+                print(f"ML Enhanced: Yes")
 
 def main():
     parser = argparse.ArgumentParser(description="OnlyFans AI Chatbot")
@@ -280,6 +323,9 @@ def main():
                                 choices=["intrigue", "rapport", "attraction", "submission"],
                                 help="IRAS phase")
     generate_parser.add_argument("--context", help="JSON context data")
+    generate_parser.add_argument("--copy", action="store_true", 
+                                help="Copy message to clipboard for easy pasting")
+    generate_parser.add_argument("--fan-id", help="Fan ID for compliance tracking")
     
     # Batch command
     batch_parser = subparsers.add_parser("batch", help="Process batch of fans")
@@ -352,6 +398,178 @@ def main():
         def mark_sent(audit_id):
             success = db.mark_message_sent_manually(audit_id)
             return jsonify({"success": success})
+        
+        # Template management endpoints
+        @app.route('/templates', methods=['GET'])
+        def get_templates():
+            from dynamic_templates import template_manager
+            templates = template_manager.get_templates()
+            stats = template_manager.get_template_statistics()
+            return jsonify({"templates": templates, "statistics": stats})
+        
+        @app.route('/templates', methods=['POST'])
+        def add_template():
+            from dynamic_templates import template_manager
+            data = request.json
+            success = template_manager.add_template(
+                personality_type=data['personality_type'],
+                phase=data['phase'],
+                template_text=data['template_text'],
+                effectiveness_score=data.get('effectiveness_score', 0.5)
+            )
+            return jsonify({"success": success})
+        
+        @app.route('/templates/<template_id>/effectiveness', methods=['PUT'])
+        def update_template_effectiveness(template_id):
+            from dynamic_templates import template_manager
+            data = request.json
+            success = template_manager.update_template_effectiveness(
+                template_id=template_id,
+                effectiveness_score=data['effectiveness_score']
+            )
+            return jsonify({"success": success})
+        
+        @app.route('/templates/performance', methods=['GET'])
+        def template_performance():
+            from dynamic_templates import template_manager
+            days = int(request.args.get('days', 30))
+            performance = template_manager.analyze_template_performance(days)
+            return jsonify(performance)
+        
+        @app.route('/templates/optimize', methods=['POST'])
+        def optimize_templates():
+            from dynamic_templates import template_manager
+            results = template_manager.optimize_templates()
+            return jsonify(results)
+        
+        # Fan analytics endpoints
+        @app.route('/analytics/fan/<fan_id>', methods=['GET'])
+        def fan_analytics(fan_id):
+            analytics = fan_tracker.get_fan_analytics(fan_id)
+            return jsonify(analytics)
+        
+        @app.route('/analytics/churn-risk/<fan_id>', methods=['GET'])
+        def churn_risk(fan_id):
+            risk_data = fan_tracker.predict_churn_risk(fan_id)
+            return jsonify(risk_data)
+        
+        # ML model feedback endpoint
+        @app.route('/ml/feedback', methods=['POST'])
+        def ml_feedback():
+            try:
+                from ml_classifier import ml_classifier
+                if not ml_classifier:
+                    return jsonify({"error": "ML classifier not available"}), 400
+                
+                data = request.json
+                ml_classifier.update_model_with_feedback(
+                    fan_id=data['fan_id'],
+                    messages=data['messages'],
+                    true_personality=data['true_personality'],
+                    true_engagement=data['true_engagement']
+                )
+                return jsonify({"success": True})
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+        
+        # ML training endpoints
+        @app.route('/ml/training/status', methods=['GET'])
+        def training_status():
+            try:
+                from ml_training_pipeline import training_pipeline
+                status = training_pipeline.get_training_status()
+                return jsonify(status)
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+        
+        @app.route('/ml/training/start', methods=['POST'])
+        def start_training():
+            try:
+                from ml_training_pipeline import training_pipeline
+                data = request.json or {}
+                force_retrain = data.get('force_retrain', False)
+                
+                results = training_pipeline.run_full_training_pipeline(force_retrain=force_retrain)
+                return jsonify(results)
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+        
+        @app.route('/ml/training/evaluate', methods=['POST'])
+        def evaluate_models():
+            try:
+                from ml_training_pipeline import training_pipeline
+                data = request.json or {}
+                model_type = data.get('model_type', 'all')
+                
+                results = training_pipeline.evaluate_model_performance(model_type)
+                return jsonify(results)
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+        
+        # One-click sending endpoints
+        @app.route('/send/prepare', methods=['POST'])
+        def prepare_manual_send():
+            try:
+                from one_click_sender import one_click_sender
+                data = request.json
+                
+                result = one_click_sender.prepare_manual_send(
+                    fan_id=data['fan_id'],
+                    message=data['message'],
+                    audit_id=data.get('audit_id')
+                )
+                return jsonify(result)
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+        
+        @app.route('/send/execute', methods=['POST'])
+        def execute_one_click_send():
+            try:
+                from one_click_sender import one_click_sender
+                data = request.json
+                
+                result = one_click_sender.execute_one_click_send(
+                    audit_id=data['audit_id'],
+                    open_browser=data.get('open_browser', True)
+                )
+                return jsonify(result)
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+        
+        @app.route('/send/confirm/<audit_id>', methods=['POST'])
+        def confirm_message_sent(audit_id):
+            try:
+                from one_click_sender import one_click_sender
+                
+                result = one_click_sender.mark_message_sent(
+                    audit_id=audit_id,
+                    sent_by_user=True
+                )
+                return jsonify(result)
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+        
+        @app.route('/send/status/<audit_id>', methods=['GET'])
+        def get_send_status(audit_id):
+            try:
+                from one_click_sender import one_click_sender
+                
+                result = one_click_sender.get_send_status(audit_id)
+                return jsonify(result)
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+        
+        @app.route('/send/report', methods=['GET'])
+        def get_send_report():
+            try:
+                from one_click_sender import one_click_sender
+                fan_id = request.args.get('fan_id')
+                days = int(request.args.get('days', 7))
+                
+                result = one_click_sender.generate_send_report(fan_id, days)
+                return jsonify(result)
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
         
         print(f"Starting server on {args.host}:{args.port}")
         app.run(host=args.host, port=args.port)

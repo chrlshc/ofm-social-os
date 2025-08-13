@@ -9,3 +9,17 @@ colorama>=0.4.6
 psycopg2-binary>=2.9.0
 flask>=2.3.0
 redis>=4.5.0
+pyperclip>=1.8.0
+
+# ML/AI dependencies (optional)
+transformers>=4.30.0
+torch>=2.0.0
+sentencepiece>=0.1.99
+
+# Advanced personalization dependencies
+scipy>=1.11.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Additional emotion analysis models (optional)
+# Install with: python -m spacy download en_core_web_sm fr_core_news_sm
