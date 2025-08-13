@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from enum import Enum
+from decimal import Decimal, ROUND_HALF_UP
 import json
 
 
@@ -245,14 +246,20 @@ class PaymentRequest:
     
     fan_id: str
     creator_id: str
-    amount_euros: float
+    amount_euros: Decimal
     currency: str = 'eur'
     metadata: Dict[str, Any] = field(default_factory=dict)
     
+    def __post_init__(self):
+        """Convertit amount_euros en Decimal si nécessaire."""
+        if not isinstance(self.amount_euros, Decimal):
+            self.amount_euros = Decimal(str(self.amount_euros))
+    
     @property
     def amount_cents(self) -> int:
-        """Retourne le montant en centimes."""
-        return int(self.amount_euros * 100)
+        """Retourne le montant en centimes avec arrondi correct."""
+        cents = self.amount_euros * 100
+        return int(cents.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
     
     def validate(self) -> List[str]:
         """Valide la demande de paiement et retourne les erreurs."""
@@ -264,17 +271,32 @@ class PaymentRequest:
         if not self.creator_id:
             errors.append("creator_id est requis")
         
-        if self.amount_euros <= 0:
-            errors.append("Le montant doit être positif")
-        
-        if self.amount_euros < 0.50:  # Minimum Stripe
-            errors.append("Le montant minimum est de 0.50€")
-        
-        if self.amount_euros > 999999.99:  # Maximum raisonnable
-            errors.append("Le montant maximum est de 999999.99€")
+        # Validation du montant avec Decimal
+        try:
+            if self.amount_euros <= 0:
+                errors.append("Le montant doit être positif")
+            
+            if self.amount_euros < Decimal('0.50'):  # Minimum Stripe
+                errors.append("Le montant minimum est de 0.50€")
+            
+            if self.amount_euros > Decimal('999999.99'):  # Maximum raisonnable
+                errors.append("Le montant maximum est de 999999.99€")
+            
+            # Vérification de la précision (max 2 décimales)
+            if self.amount_euros.as_tuple().exponent < -2:
+                errors.append("Le montant ne peut avoir plus de 2 décimales")
+        except Exception as e:
+            errors.append(f"Montant invalide: {str(e)}")
         
         if self.currency.lower() != 'eur':
             errors.append("Seule la devise EUR est supportée")
+        
+        # Validation des IDs (protection contre injection)
+        if not self.fan_id.replace('_', '').replace('-', '').isalnum():
+            errors.append("fan_id contient des caractères invalides")
+        
+        if not self.creator_id.replace('_', '').replace('-', '').isalnum():
+            errors.append("creator_id contient des caractères invalides")
         
         return errors
     
@@ -283,7 +305,7 @@ class PaymentRequest:
         return {
             'fan_id': self.fan_id,
             'creator_id': self.creator_id,
-            'amount_euros': self.amount_euros,
+            'amount_euros': float(self.amount_euros),
             'amount_cents': self.amount_cents,
             'currency': self.currency,
             'metadata': self.metadata
@@ -353,6 +375,43 @@ def format_currency(amount_cents: int, currency: str = 'EUR') -> str:
         return f"{amount:.2f} {currency.upper()}"
 
 
+def validate_monetary_amount(amount: Any, field_name: str = "amount") -> Decimal:
+    """
+    Valide et convertit un montant monétaire en Decimal.
+    
+    Args:
+        amount: Montant à valider (string, float, int ou Decimal)
+        field_name: Nom du champ pour les messages d'erreur
+        
+    Returns:
+        Montant validé en Decimal
+        
+    Raises:
+        ValueError: Si le montant est invalide
+    """
+    try:
+        # Conversion en Decimal
+        if isinstance(amount, Decimal):
+            decimal_amount = amount
+        else:
+            # Convertir en string d'abord pour éviter les problèmes de float
+            decimal_amount = Decimal(str(amount))
+        
+        # Vérification de la validité
+        if decimal_amount.is_nan() or decimal_amount.is_infinite():
+            raise ValueError(f"{field_name} invalide")
+        
+        # Vérification de la précision (max 2 décimales pour les euros)
+        if decimal_amount.as_tuple().exponent < -2:
+            # Arrondir à 2 décimales
+            decimal_amount = decimal_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        
+        return decimal_amount
+        
+    except Exception as e:
+        raise ValueError(f"{field_name} invalide: {str(e)}")
+
+
 # Exemples d'utilisation
 if __name__ == "__main__":
     from datetime import datetime, timezone
@@ -380,11 +439,11 @@ if __name__ == "__main__":
     print(f"Net créatrice: {transaction.net_amount_euros}€")
     print(f"Statut: {transaction.status.value}")
     
-    # Exemple de demande de paiement
+    # Exemple de demande de paiement avec Decimal
     request = PaymentRequest(
         fan_id="fan_002",
         creator_id="creator_002",
-        amount_euros=250.0,
+        amount_euros=Decimal("250.00"),
         metadata={"tip": "true", "message": "Merci pour le contenu!"}
     )
     
@@ -393,3 +452,13 @@ if __name__ == "__main__":
         print(f"\nErreurs de validation: {errors}")
     else:
         print(f"\nDemande valide: {request.amount_euros}€ pour {request.creator_id}")
+    
+    # Test de validation monétaire
+    print("\n=== Tests de validation monétaire ===")
+    test_amounts = ["123.45", "123.456", 123.45, Decimal("123.45"), "abc"]
+    for amount in test_amounts:
+        try:
+            validated = validate_monetary_amount(amount)
+            print(f"{amount} -> {validated} (type: {type(validated).__name__})")
+        except ValueError as e:
+            print(f"{amount} -> Erreur: {e}")
