@@ -556,6 +556,112 @@ def get_monthly_revenue(creator_id: str, year: int, month: int):
         return jsonify({'error': 'Erreur interne du serveur'}), 500
 
 
+@app.route('/creators/<creator_id>/onboarding-link', methods=['POST'])
+@limiter.limit("5 per minute")
+@require_creator_access('creator_id')
+@audit_log('create', 'onboarding_link')
+def create_onboarding_link(creator_id: str):
+    """Crée un nouveau lien d'onboarding pour une créatrice."""
+    try:
+        creator_account = db_service.get_creator_account(creator_id)
+        if not creator_account:
+            raise_not_found_error('Compte créatrice', creator_id)
+        
+        # Création du lien via le gestionnaire
+        onboarding_url = connect_manager.create_onboarding_link(creator_account.stripe_account_id)
+        
+        logger.info(f"Lien d'onboarding créé pour {creator_id} par {request.user_id}")
+        
+        return jsonify({
+            'onboarding_url': onboarding_url,
+            'expires_at': (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+        }), 200
+        
+    except PaymentAPIError:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur création lien onboarding {creator_id}: {e}")
+        raise PaymentAPIError(
+            error_code=ErrorCode.SYSTEM_INTERNAL_ERROR,
+            message='Erreur lors de la création du lien d\'onboarding',
+            http_status=500
+        )
+
+
+@app.route('/creators/<creator_id>/dashboard-link', methods=['POST'])
+@limiter.limit("10 per minute")
+@require_creator_access('creator_id')
+@audit_log('create', 'dashboard_link')
+def create_dashboard_link(creator_id: str):
+    """Crée un lien vers le dashboard Stripe Express."""
+    try:
+        creator_account = db_service.get_creator_account(creator_id)
+        if not creator_account:
+            raise_not_found_error('Compte créatrice', creator_id)
+        
+        # Vérifier que le compte est actif
+        if not creator_account.charges_enabled:
+            raise PaymentAPIError(
+                error_code=ErrorCode.PAYMENT_INVALID_ACCOUNT,
+                message='Le compte doit être activé pour accéder au dashboard',
+                http_status=400
+            )
+        
+        # Création du lien dashboard
+        dashboard_url = connect_manager.create_dashboard_link(creator_account.stripe_account_id)
+        
+        logger.info(f"Lien dashboard créé pour {creator_id}")
+        
+        return jsonify({
+            'dashboard_url': dashboard_url
+        }), 200
+        
+    except PaymentAPIError:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur création lien dashboard {creator_id}: {e}")
+        raise PaymentAPIError(
+            error_code=ErrorCode.SYSTEM_INTERNAL_ERROR,
+            message='Erreur lors de la création du lien dashboard',
+            http_status=500
+        )
+
+
+@app.route('/creators/<creator_id>/stripe-status', methods=['GET'])
+@limiter.limit("20 per minute")
+@require_creator_access('creator_id')
+@audit_log('read', 'stripe_status')
+def get_creator_stripe_status(creator_id: str):
+    """Récupère le statut détaillé du compte Stripe d'une créatrice."""
+    try:
+        creator_account = db_service.get_creator_account(creator_id)
+        if not creator_account:
+            raise_not_found_error('Compte créatrice', creator_id)
+        
+        # Récupération du statut via le gestionnaire
+        stripe_status = connect_manager.get_account_status(creator_account.stripe_account_id)
+        
+        # Mise à jour en base si nécessaire
+        connect_manager.update_account_in_database(creator_account.stripe_account_id)
+        
+        return jsonify({
+            'creator_id': creator_id,
+            'stripe_account_id': creator_account.stripe_account_id,
+            'status': stripe_status,
+            'last_updated': datetime.now(timezone.utc).isoformat()
+        }), 200
+        
+    except PaymentAPIError:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur récupération statut Stripe {creator_id}: {e}")
+        raise PaymentAPIError(
+            error_code=ErrorCode.SYSTEM_INTERNAL_ERROR,
+            message='Erreur lors de la récupération du statut',
+            http_status=500
+        )
+
+
 @app.route('/commission/estimate', methods=['POST'])
 @limiter.limit("30 per minute")
 def estimate_commission():
