@@ -28,6 +28,7 @@ from .security import (
 from .user_management import user_service, init_default_users
 from .error_handling import setup_error_handlers, PaymentAPIError, ErrorCode, raise_not_found_error, raise_validation_error
 from .stripe_connect_manager import init_stripe_connect_manager, connect_manager
+from .feature_gates import PaymentFeatureGates, FeatureGuard
 
 # Chargement des variables d'environnement
 load_dotenv()
@@ -128,6 +129,57 @@ def log_request_info():
             f"User-Agent: {request.headers.get('User-Agent', 'Unknown')[:100]}"
         )
 
+# Garde-fou production pour tous les endpoints critiques
+@app.before_request
+def production_safety_guard():
+    """
+    Vérifie les garde-fous de production avant chaque requête critique.
+    Bloque automatiquement si la configuration n'est pas sûre.
+    """
+    # Exclure les endpoints non critiques
+    if request.endpoint in ['health_check', 'estimate_commission', 'get_feature_status']:
+        return
+    
+    # Exclure les méthodes GET non critiques
+    if request.method == 'GET' and request.endpoint not in ['get_payment', 'get_monthly_revenue']:
+        return
+        
+    try:
+        # Vérifications de base
+        if PaymentFeatureGates.is_kill_switch_active():
+            return jsonify({
+                "error": "kill_switch_active",
+                "message": "Payment processing is temporarily suspended",
+                "status": PaymentFeatureGates.get_feature_status()
+            }), 503
+            
+        if not PaymentFeatureGates.is_payments_enabled():
+            return jsonify({
+                "error": "payments_disabled", 
+                "message": "Payment processing is currently disabled",
+                "status": PaymentFeatureGates.get_feature_status()
+            }), 503
+            
+        # Vérifications spécifiques production
+        if PaymentFeatureGates.is_production_environment():
+            PaymentFeatureGates.assert_prod_safe()
+            
+    except PermissionError as e:
+        logger.error(f"Production safety check failed: {e}")
+        return jsonify({
+            "error": "production_safety_check_failed",
+            "message": str(e),
+            "status": PaymentFeatureGates.get_feature_status()
+        }), 503
+        
+    except ValueError as e:
+        logger.error(f"Configuration error: {e}")
+        return jsonify({
+            "error": "configuration_error", 
+            "message": str(e),
+            "status": PaymentFeatureGates.get_feature_status()
+        }), 500
+
 
 # Endpoints publics (non authentifiés)
 @app.route('/health', methods=['GET'])
@@ -139,11 +191,17 @@ def health_check():
         'version': '2.0.0'
     })
 
+@app.route('/admin/feature-status', methods=['GET'])
+def get_feature_status():
+    """Endpoint pour vérifier le statut des feature gates (non authentifié pour monitoring)."""
+    return jsonify(PaymentFeatureGates.get_feature_status()), 200
+
 
 # Endpoints protégés
 @app.route('/payments', methods=['POST'])
 @limiter.limit("10 per minute")  # Rate limiting
 @require_auth(['user', 'creator'])  # Authentification requise
+@FeatureGuard.payments_required  # Feature gate protection
 @audit_log('create', 'payment')  # Log d'audit
 def create_payment():
     """
