@@ -91,15 +91,27 @@ class ABTestingManager:
     def _get_variants_with_metrics(self, fan_type: str, phase: str) -> List[Dict]:
         """Get all variants with their performance metrics"""
         try:
-            # Use database method to get variants
-            variant = db.select_variant(fan_type, phase)
+            # Get all variants for this type/phase combination from database
+            # This method needs to be implemented in database.py
+            from psycopg2.extras import RealDictCursor
             
-            if not variant:
+            if not db._pool:
                 return []
             
-            # Get all variants for this type/phase combination
-            # This is a simplified version - in practice you'd get all variants
-            return [variant]
+            with db.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT mv.variant_id, mv.template_text, mv.variant_name,
+                               vm.conversion_rate, vm.send_count, vm.response_rate,
+                               vm.conversion_count, vm.response_count
+                        FROM chatting.message_variants mv
+                        LEFT JOIN chatting.variant_metrics vm ON mv.variant_id = vm.variant_id
+                        WHERE mv.personality_type = %s AND mv.phase = %s 
+                              AND mv.is_active = true
+                        ORDER BY vm.conversion_rate DESC NULLS LAST
+                    """, (fan_type, phase))
+                    
+                    return [dict(row) for row in cur.fetchall()]
             
         except Exception as e:
             logger.error(f"Failed to get variants with metrics: {e}")

@@ -603,6 +603,36 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Failed to get variant performance summary: {e}")
             return []
+    
+    def get_all_fan_profiles(self) -> List[Dict[str, Any]]:
+        """Retourne tous les profils de fans pour l'entraînement ML"""
+        if not self._pool:
+            return []
+        
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    sql = """
+                    SELECT 
+                        fan_id,
+                        personality_type,
+                        engagement_level,
+                        spending_potential,
+                        interests,
+                        created_at,
+                        last_analyzed
+                    FROM chatting.fan_profiles
+                    WHERE personality_type IS NOT NULL
+                    ORDER BY last_analyzed DESC NULLS LAST
+                    """
+                    cur.execute(sql)
+                    profiles = cur.fetchall()
+                    
+                    return [dict(row) for row in profiles]
+                    
+        except Exception as e:
+            logger.error(f"Failed to fetch all fan profiles: {e}")
+            return []
         
         try:
             with self.get_connection() as conn:

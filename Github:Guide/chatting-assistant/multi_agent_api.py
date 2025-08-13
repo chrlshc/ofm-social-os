@@ -45,19 +45,72 @@ class MultiAgentAPI:
                 g.agent_id = self._authenticate_agent()
     
     def _authenticate_agent(self) -> Optional[str]:
-        """Authenticate agent from request headers"""
+        """Authenticate agent from request headers with enhanced security"""
         agent_id = request.headers.get('X-Agent-ID')
         agent_key = request.headers.get('X-Agent-Key')
+        agent_signature = request.headers.get('X-Agent-Signature')
         
         if not agent_id or not agent_key:
+            logger.warning(f"Missing authentication headers from {request.remote_addr}")
             return None
         
-        # Simple authentication - in production, use proper auth
-        expected_key = config.get('multi_agent', 'agent_key', default='default_key')
-        if agent_key != expected_key:
+        # Validate agent ID format
+        if not self._is_valid_agent_id(agent_id):
+            logger.warning(f"Invalid agent ID format: {agent_id}")
             return None
         
+        # Get expected key from secure configuration
+        expected_key = config.get('multi_agent', 'agent_key', default='CHANGE_THIS_SECURE_KEY_IN_PRODUCTION')
+        
+        # Warn if using default key
+        if expected_key == 'CHANGE_THIS_SECURE_KEY_IN_PRODUCTION':
+            logger.warning("Using default agent key - CHANGE THIS IN PRODUCTION!")
+        
+        # Constant-time comparison to prevent timing attacks
+        if not self._secure_compare(agent_key, expected_key):
+            logger.warning(f"Invalid agent key for agent {agent_id} from {request.remote_addr}")
+            return None
+        
+        # Check session limits
+        if not self._check_session_limits(agent_id):
+            logger.warning(f"Session limit exceeded for agent {agent_id}")
+            return None
+        
+        logger.info(f"Agent {agent_id} authenticated successfully")
         return agent_id
+    
+    def _is_valid_agent_id(self, agent_id: str) -> bool:
+        """Validate agent ID format"""
+        import re
+        # Allow alphanumeric, hyphens, underscores, max 50 chars
+        pattern = r'^[a-zA-Z0-9_-]{1,50}$'
+        return bool(re.match(pattern, agent_id))
+    
+    def _secure_compare(self, a: str, b: str) -> bool:
+        """Constant-time string comparison to prevent timing attacks"""
+        if len(a) != len(b):
+            return False
+        
+        result = 0
+        for x, y in zip(a, b):
+            result |= ord(x) ^ ord(y)
+        return result == 0
+    
+    def _check_session_limits(self, agent_id: str) -> bool:
+        """Check if agent can create new sessions"""
+        max_concurrent = config.get('multi_agent', 'max_concurrent_agents', default=50)
+        
+        # Count active sessions for this agent
+        agent_sessions = [s for s in self.agent_sessions.values() if s.get('agent_id') == agent_id]
+        
+        if len(agent_sessions) >= 5:  # Max 5 sessions per agent
+            return False
+        
+        # Check total active sessions
+        if len(self.agent_sessions) >= max_concurrent:
+            return False
+        
+        return True
     
     def _register_routes(self):
         """Register all multi-agent API routes"""
