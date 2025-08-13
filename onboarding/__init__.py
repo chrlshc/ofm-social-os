@@ -11,5 +11,6 @@ Pre-connection onboarding system with minimal friction:
 """
 
 from .routes import bp as onboarding_bp
+from .admin_panel import admin_bp
 
-__all__ = ['onboarding_bp']
+__all__ = ['onboarding_bp', 'admin_bp']

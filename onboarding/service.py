@@ -27,6 +27,7 @@ from .models import OnboardingSession, CreatorProfile, VerificationToken
 from .tokens import EmailTokenService
 from .stripe_connect import StripeConnectService, StripeConnectError
 from .emailer import EmailService
+from .business_rules import get_rules_engine, RuleType
 
 logger = logging.getLogger(__name__)
 
@@ -465,10 +466,13 @@ class OnboardingService:
             if session:
                 session.advance_to_step("completed")
             
-            # Update creator profile
+            # Update creator profile with business rules
             profile = db.query(CreatorProfile).filter_by(user_id=user_id).first()
             if profile:
                 profile.complete_activation()
+                
+                # Apply business rules for initial tier assignment
+                self._apply_initial_business_rules(db, profile)
             
             # Schedule background marketing automation tasks
             self._schedule_marketing_automation(user_id)
@@ -477,6 +481,42 @@ class OnboardingService:
             
         except Exception as e:
             logger.error(f"Failed to complete onboarding for user {user_id}: {str(e)}")
+    
+    def _apply_initial_business_rules(self, db: Session, profile: CreatorProfile):
+        """
+        Apply initial business rules for new creator
+        
+        Args:
+            db: Database session
+            profile: Creator profile to configure
+        """
+        try:
+            rules_engine = get_rules_engine()
+            
+            # Set default tier if not already set
+            if not profile.pricing_tier:
+                profile.pricing_tier = "entry"  # Default for new creators
+            
+            # Set default account size if not already set  
+            if not profile.account_size:
+                profile.account_size = "micro"  # Default for new creators
+            
+            # Get marketing strategy for initial configuration
+            strategy = rules_engine.get_marketing_strategy(
+                profile.account_size,
+                profile.content_categories or []
+            )
+            
+            if strategy:
+                # Store initial pricing suggestions in profile metadata
+                pricing_suggestions = strategy.pricing_suggestions.get(profile.pricing_tier, (10.0, 20.0))
+                logger.info(f"Initial pricing suggestion for user {profile.user_id}: ${pricing_suggestions[0]}-${pricing_suggestions[1]}")
+            
+            db.commit()
+            
+        except Exception as e:
+            logger.error(f"Failed to apply business rules for profile {profile.id}: {str(e)}")
+            db.rollback()
     
     def _schedule_marketing_automation(self, user_id: str):
         """

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from .service import OnboardingService, OnboardingError
 from .stripe_connect import StripeConnectService, StripeConnectError, WebhookHandler
 from .tokens import EmailTokenService
+from .business_rules import get_rules_engine
 
 # Blueprint setup
 bp = Blueprint("onboarding", __name__, url_prefix="/api/v1")
@@ -473,6 +474,103 @@ def update_timezone():
     except Exception as e:
         logger.error(f"Timezone update failed: {str(e)}")
         return error_response("Failed to update timezone", 500)
+
+
+@bp.route("/pricing-suggestions", methods=["GET"])
+@require_auth(["creator"])
+def get_pricing_suggestions():
+    """
+    Get personalized pricing suggestions based on creator tier and account size
+    
+    Returns:
+        200: Pricing suggestions based on business rules
+    """
+    try:
+        with get_db_session() as db:
+            from .models import CreatorProfile
+            
+            profile = db.query(CreatorProfile).filter_by(user_id=request.user_id).first()
+            if not profile:
+                return error_response("Creator profile not found", 404)
+            
+            rules_engine = get_rules_engine()
+            strategy = rules_engine.get_marketing_strategy(
+                profile.account_size or "micro",
+                profile.content_categories or []
+            )
+            
+            if strategy:
+                pricing_suggestions = strategy.pricing_suggestions
+                content_schedule = strategy.content_schedule
+                
+                response_data = {
+                    "account_size": profile.account_size,
+                    "pricing_tier": profile.pricing_tier,
+                    "pricing_suggestions": pricing_suggestions,
+                    "content_schedule": content_schedule,
+                    "engagement_tactics": strategy.engagement_tactics,
+                    "target_categories": strategy.target_categories
+                }
+                
+                return success_response(response_data, "Pricing suggestions retrieved")
+            else:
+                return error_response("No marketing strategy found", 404)
+                
+    except Exception as e:
+        logger.error(f"Failed to get pricing suggestions: {str(e)}")
+        return error_response("Failed to get pricing suggestions", 500)
+
+
+@bp.route("/commission-rate", methods=["GET"]) 
+@require_auth(["creator"])
+def get_commission_rate():
+    """
+    Get current commission rate for creator based on tier and volume
+    
+    Query Parameters:
+        monthly_volume: Optional monthly volume for calculation
+        
+    Returns:
+        200: Current commission rate information
+    """
+    try:
+        monthly_volume = request.args.get("monthly_volume", 0, type=float)
+        
+        with get_db_session() as db:
+            from .models import CreatorProfile
+            
+            profile = db.query(CreatorProfile).filter_by(user_id=request.user_id).first()
+            if not profile:
+                return error_response("Creator profile not found", 404)
+            
+            rules_engine = get_rules_engine()
+            commission_rate = rules_engine.get_commission_rate(
+                profile.pricing_tier or "entry",
+                monthly_volume
+            )
+            
+            # Calculate example earnings
+            if monthly_volume > 0:
+                commission_amount = monthly_volume * commission_rate
+                creator_earnings = monthly_volume - commission_amount
+            else:
+                commission_amount = 0
+                creator_earnings = 0
+            
+            response_data = {
+                "pricing_tier": profile.pricing_tier,
+                "commission_rate": commission_rate,
+                "commission_percentage": round(commission_rate * 100, 2),
+                "monthly_volume": monthly_volume,
+                "commission_amount": round(commission_amount, 2),
+                "creator_earnings": round(creator_earnings, 2)
+            }
+            
+            return success_response(response_data, "Commission rate retrieved")
+            
+    except Exception as e:
+        logger.error(f"Failed to get commission rate: {str(e)}")
+        return error_response("Failed to get commission rate", 500)
 
 
 # === WEBHOOK ROUTES ===
