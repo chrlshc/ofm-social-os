@@ -1,0 +1,154 @@
+{
+  "name": "OFM Onboarding",
+  "short_name": "OFM",
+  "description": "OnlyFans Management - Creator Onboarding Platform",
+  "start_url": "/onboarding",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#6366f1",
+  "background_color": "#ffffff",
+  "categories": ["business", "productivity", "social"],
+  
+  "icons": [
+    {
+      "src": "/static/icons/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  
+  "screenshots": [
+    {
+      "src": "/static/screenshots/mobile-onboarding-1.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "platform": "narrow",
+      "label": "Registration Screen"
+    },
+    {
+      "src": "/static/screenshots/mobile-onboarding-2.png",
+      "sizes": "390x844", 
+      "type": "image/png",
+      "platform": "narrow",
+      "label": "Stripe Connect Setup"
+    },
+    {
+      "src": "/static/screenshots/desktop-onboarding.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "platform": "wide",
+      "label": "Desktop Onboarding Flow"
+    }
+  ],
+  
+  "shortcuts": [
+    {
+      "name": "Start Onboarding",
+      "url": "/onboarding",
+      "icons": [
+        {
+          "src": "/static/icons/shortcut-onboarding.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Check Status",
+      "url": "/onboarding/status",
+      "icons": [
+        {
+          "src": "/static/icons/shortcut-status.png", 
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://ofm-platform.com/manifest.json"
+    }
+  ],
+  
+  "prefer_related_applications": false,
+  
+  "protocol_handlers": [
+    {
+      "protocol": "web+ofm",
+      "url": "/onboarding?action=%s"
+    }
+  ],
+  
+  "share_target": {
+    "action": "/api/onboarding/share",
+    "method": "POST",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  
+  "permissions": [
+    "notifications",
+    "geolocation",
+    "camera"
+  ],
+  
+  "id": "ofm-onboarding-app",
+  "lang": "en-US",
+  "dir": "ltr"
+}
