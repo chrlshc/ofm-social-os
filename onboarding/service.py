@@ -239,16 +239,22 @@ class OnboardingService:
             True if terms acceptance recorded
         """
         try:
+            # Import User model from payment system
+            from payment.src.user_management import DBUser
+            
+            # Update user's terms acceptance
+            user = db.query(DBUser).filter_by(id=user_id).first()
+            if user:
+                user.accepted_terms = True
+                user.accepted_terms_at = datetime.utcnow()
+            
             # Update onboarding session
             session = db.query(OnboardingSession).filter_by(user_id=user_id).first()
             if session:
                 session.advance_to_step("terms_accepted")
                 
-                # Note: Assumes User model has accepted_terms fields
-                # This would need to be implemented in the existing User model
-                
                 db.commit()
-                logger.info(f"Terms accepted for user {user_id}")
+                logger.info(f"Terms accepted for user {user_id} at {user.accepted_terms_at}")
                 return True
             
             return False

@@ -477,29 +477,168 @@ class BusinessRulesEngine:
     
     def _persist_rules_to_db(self, rule_type: RuleType, rules_data: Dict[str, Any]):
         """Persist rules to database for durability"""
-        # Implementation would depend on your database schema
-        # This is a placeholder for the database persistence logic
-        pass
+        try:
+            with self.db_session_factory() as db:
+                if rule_type == RuleType.COMMISSION:
+                    from .business_rules_models import CommissionRuleModel
+                    
+                    for tier_name, rule_data in rules_data.items():
+                        existing = db.query(CommissionRuleModel).filter_by(tier_name=tier_name).first()
+                        
+                        if existing:
+                            # Update existing rule
+                            existing.base_rate = rule_data['base_rate']
+                            existing.volume_thresholds = rule_data['volume_thresholds']
+                            existing.min_rate = rule_data['min_rate']
+                            existing.max_rate = rule_data['max_rate']
+                            existing.version += 1
+                            existing.updated_at = datetime.utcnow()
+                        else:
+                            # Create new rule
+                            new_rule = CommissionRuleModel(
+                                tier_name=tier_name,
+                                base_rate=rule_data['base_rate'],
+                                volume_thresholds=rule_data['volume_thresholds'],
+                                min_rate=rule_data['min_rate'],
+                                max_rate=rule_data['max_rate'],
+                                created_by='admin'  # Should come from context
+                            )
+                            db.add(new_rule)
+                
+                elif rule_type == RuleType.MARKETING:
+                    from .business_rules_models import MarketingStrategyModel
+                    
+                    for account_size, strategy_data in rules_data.items():
+                        existing = db.query(MarketingStrategyModel).filter_by(account_size=account_size).first()
+                        
+                        if existing:
+                            # Update existing strategy
+                            existing.pricing_suggestions = strategy_data['pricing_suggestions']
+                            existing.content_schedule = strategy_data['content_schedule']
+                            existing.target_categories = strategy_data['target_categories']
+                            existing.engagement_tactics = strategy_data['engagement_tactics']
+                            existing.priority_score = strategy_data['priority_score']
+                            existing.version += 1
+                            existing.updated_at = datetime.utcnow()
+                        else:
+                            # Create new strategy
+                            new_strategy = MarketingStrategyModel(
+                                account_size=account_size,
+                                pricing_suggestions=strategy_data['pricing_suggestions'],
+                                content_schedule=strategy_data['content_schedule'],
+                                target_categories=strategy_data['target_categories'],
+                                engagement_tactics=strategy_data['engagement_tactics'],
+                                priority_score=strategy_data['priority_score'],
+                                created_by='admin'  # Should come from context
+                            )
+                            db.add(new_strategy)
+                
+                elif rule_type == RuleType.FEATURE_FLAGS:
+                    from .business_rules_models import FeatureFlagModel
+                    
+                    for feature_name, is_enabled in rules_data.items():
+                        existing = db.query(FeatureFlagModel).filter_by(feature_name=feature_name).first()
+                        
+                        if existing:
+                            existing.is_enabled = is_enabled
+                            existing.version += 1
+                            existing.updated_at = datetime.utcnow()
+                        else:
+                            new_flag = FeatureFlagModel(
+                                feature_name=feature_name,
+                                is_enabled=is_enabled,
+                                created_by='admin'  # Should come from context
+                            )
+                            db.add(new_flag)
+                
+                db.commit()
+                logger.info(f"Persisted {rule_type.value} rules to database")
+                
+        except Exception as e:
+            logger.error(f"Failed to persist rules to database: {str(e)}")
+            raise
     
     def _load_commission_rules(self, db: Session):
         """Load commission rules from database"""
-        # Placeholder - implement based on your database schema
-        pass
+        try:
+            from .business_rules_models import CommissionRuleModel
+            
+            rules = db.query(CommissionRuleModel).filter_by(is_active=True).all()
+            self.rules_cache[RuleType.COMMISSION] = {}
+            
+            for rule in rules:
+                commission_rule = CommissionRule(
+                    tier=rule.tier_name,
+                    base_rate=rule.base_rate,
+                    volume_thresholds=rule.volume_thresholds,
+                    min_rate=rule.min_rate,
+                    max_rate=rule.max_rate,
+                    effective_date=rule.effective_date,
+                    expires_date=rule.expires_date
+                )
+                self.rules_cache[RuleType.COMMISSION][rule.tier_name] = commission_rule
+                
+            logger.info(f"Loaded {len(rules)} commission rules from database")
+            
+        except Exception as e:
+            logger.error(f"Failed to load commission rules from DB: {str(e)}")
+            # Fall back to defaults loaded earlier
     
     def _load_marketing_strategies(self, db: Session):
         """Load marketing strategies from database"""
-        # Placeholder - implement based on your database schema  
-        pass
+        try:
+            from .business_rules_models import MarketingStrategyModel
+            
+            strategies = db.query(MarketingStrategyModel).filter_by(is_active=True).all()
+            self.rules_cache[RuleType.MARKETING] = {}
+            
+            for strategy in strategies:
+                marketing_strategy = MarketingStrategy(
+                    account_size=strategy.account_size,
+                    pricing_suggestions=strategy.pricing_suggestions,
+                    content_schedule=strategy.content_schedule,
+                    target_categories=strategy.target_categories,
+                    engagement_tactics=strategy.engagement_tactics,
+                    priority_score=strategy.priority_score
+                )
+                self.rules_cache[RuleType.MARKETING][strategy.account_size] = marketing_strategy
+                
+            logger.info(f"Loaded {len(strategies)} marketing strategies from database")
+            
+        except Exception as e:
+            logger.error(f"Failed to load marketing strategies from DB: {str(e)}")
+            # Fall back to defaults loaded earlier
     
     def _load_onboarding_rules(self, db: Session):
         """Load onboarding rules from database"""
-        # Placeholder - implement based on your database schema
+        # Not yet implemented - using defaults for now
         pass
     
     def _load_feature_flags(self, db: Session):
         """Load feature flags from database"""
-        # Placeholder - implement based on your database schema
-        pass
+        try:
+            from .business_rules_models import FeatureFlagModel
+            
+            flags = db.query(FeatureFlagModel).all()
+            self.rules_cache[RuleType.FEATURE_FLAGS] = {}
+            
+            for flag in flags:
+                self.rules_cache[RuleType.FEATURE_FLAGS][flag.feature_name] = flag.is_enabled
+                
+                # Store A/B test config if enabled
+                if flag.ab_test_enabled:
+                    if RuleType.A_B_TESTING not in self.rules_cache:
+                        self.rules_cache[RuleType.A_B_TESTING] = {}
+                    
+                    self.rules_cache[RuleType.A_B_TESTING][flag.feature_name] = {
+                        "rollout_percentage": flag.rollout_percentage
+                    }
+                    
+            logger.info(f"Loaded {len(flags)} feature flags from database")
+            
+        except Exception as e:
+            logger.error(f"Failed to load feature flags from DB: {str(e)}")
+            # Fall back to defaults loaded earlier
     
     def _log_rules_update(self, rule_type: RuleType, admin_user_id: str, new_version: str):
         """Log rules update for audit trail"""

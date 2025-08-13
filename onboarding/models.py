@@ -62,6 +62,10 @@ class CreatorProfile(Base):
     id = Column(String(50), primary_key=True, default=lambda: f"cp_{uuid.uuid4().hex[:12]}")
     user_id = Column(String(50), ForeignKey("users.id"), unique=True, nullable=False)
     
+    # Public profile information
+    public_name = Column(String(100), nullable=True)  # Nom public affiché
+    description = Column(String(500), nullable=True)  # Bio ou description courte
+    
     # OnlyFans connection (populated later)
     onlyfans_handle = Column(String(100), nullable=True)
     onlyfans_connected_at = Column(DateTime, nullable=True)

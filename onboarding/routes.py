@@ -476,6 +476,61 @@ def update_timezone():
         return error_response("Failed to update timezone", 500)
 
 
+@bp.route("/onboarding/<session_id>/timezone", methods=["POST"])
+@require_auth(['creator'])
+def update_timezone_by_session(session_id):
+    """
+    Update timezone from client-side for specific onboarding session
+    
+    Path:
+        session_id: Onboarding session ID
+        
+    Body:
+        timezone: IANA timezone from Intl.DateTimeFormat().resolvedOptions().timeZone
+        
+    Returns:
+        200: Timezone updated successfully
+        404: Session not found
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return error_response("Request body required")
+        
+        client_timezone = data.get("timezone")
+        if not client_timezone:
+            return error_response("Timezone required")
+        
+        with get_db_session() as db:
+            from .models import OnboardingSession, CreatorProfile
+            
+            # Verify session belongs to user
+            session = db.query(OnboardingSession).filter_by(
+                id=session_id,
+                user_id=request.user_id
+            ).first()
+            
+            if not session:
+                return error_response("Onboarding session not found", 404)
+            
+            # Update creator profile timezone
+            profile = db.query(CreatorProfile).filter_by(user_id=request.user_id).first()
+            if profile:
+                profile.timezone = onboarding_service.LocaleDetectionService.normalize_timezone(client_timezone)
+                db.commit()
+                
+                return success_response({
+                    "timezone": profile.timezone,
+                    "normalized": True
+                }, "Timezone updated successfully")
+            else:
+                return error_response("Creator profile not found", 404)
+            
+    except Exception as e:
+        logger.error(f"Timezone update failed for session {session_id}: {str(e)}")
+        return error_response("Failed to update timezone", 500)
+
+
 @bp.route("/pricing-suggestions", methods=["GET"])
 @require_auth(["creator"])
 def get_pricing_suggestions():

@@ -48,6 +48,11 @@ class DBUser(Base):
     last_name = Column(String(100), nullable=True)
     email_verified = Column(Boolean, nullable=False, default=False)
     phone = Column(String(20), nullable=True)
+    
+    # CGU acceptance tracking
+    accepted_terms = Column(Boolean, nullable=False, default=False)
+    accepted_terms_at = Column(DateTime(timezone=True), nullable=True)
+    
     last_login_at = Column(DateTime(timezone=True), nullable=True)
     failed_login_attempts = Column(String(10), nullable=False, default='0')
     locked_until = Column(DateTime(timezone=True), nullable=True)
