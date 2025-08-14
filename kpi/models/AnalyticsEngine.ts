@@ -11,6 +11,11 @@ import {
   TrendResult,
   CorrelationResult
 } from '../analytics/StatsUtils';
+import { 
+  generateRecommendations, 
+  generateContextualInsights, 
+  KPIContext 
+} from '../advisors/AIAdvisor';
 
 export interface AnalyticsConfig {
   modelName: string;
@@ -136,7 +141,11 @@ export class AnalyticsEngine {
       ? await this.analyzeCorrelations(processedData.transformedRecords)
       : [];
     
-    // 4. Generate Recommendations
+    // 4. AI-Powered Insights Generation
+    const aiInsights = await this.produceAIInsights(processedData.transformedRecords, trends, anomalies);
+    insights.push(...aiInsights);
+    
+    // 5. Generate Recommendations (incluant AI Advisor)
     const analyticsRecommendations = await this.generateRecommendations({
       insights,
       trends,
@@ -424,6 +433,117 @@ Génère 2-3 recommandations concrètes en format JSON:
     } else {
       return `Corrélation ${direction} modérée. Relation à surveiller.`;
     }
+  }
+
+  // Production d'insights AI intégrés
+  async produceAIInsights(
+    records: KpiRecord[], 
+    trends: TrendData[], 
+    anomalies: AnomalyData[]
+  ): Promise<Insight[]> {
+    const aggregatedMetrics = await this.computeAggregatedMetrics(records);
+    const trendsMap = await this.detectTrends(records);
+    const benchmarks = await this.getModelBenchmarks();
+    const anomalyDescriptions = anomalies.map(a => 
+      `${a.metric}: ${a.value} (${a.severity} severity)`
+    );
+
+    const kpiContext: KPIContext = {
+      modelName: this.config.modelName,
+      aggregatedMetrics,
+      trends: trendsMap,
+      benchmarks,
+      anomalies: anomalyDescriptions
+    };
+
+    try {
+      const recommendations = await generateRecommendations(kpiContext, {
+        priorityLevel: 'high',
+        includeActionItems: true
+      });
+
+      const historicalData = await this.getHistoricalData(records);
+      const contextualInsights = await generateContextualInsights(kpiContext, historicalData);
+
+      return [...recommendations, ...contextualInsights];
+    } catch (error) {
+      console.error('Error producing AI insights:', error);
+      return [{
+        modelName: this.config.modelName,
+        insight: `Erreur lors de la génération d'insights AI: ${error.message}`,
+        timestamp: new Date(),
+        category: 'error',
+        priority: 'high'
+      }];
+    }
+  }
+
+  private async computeAggregatedMetrics(records: KpiRecord[]): Promise<Record<string, number>> {
+    const metrics: Record<string, number[]> = {};
+    
+    records.forEach(record => {
+      if (!metrics[record.metricName]) {
+        metrics[record.metricName] = [];
+      }
+      metrics[record.metricName].push(record.value);
+    });
+
+    const aggregated: Record<string, number> = {};
+    for (const [metricName, values] of Object.entries(metrics)) {
+      const stats = calculateBasicStats(values);
+      aggregated[metricName] = stats.mean;
+    }
+
+    return aggregated;
+  }
+
+  private async detectTrends(records: KpiRecord[]): Promise<Record<string, string>> {
+    const trends: Record<string, string> = {};
+    const metrics = [...new Set(records.map(r => r.metricName))];
+
+    for (const metric of metrics) {
+      const metricRecords = records
+        .filter(r => r.metricName === metric)
+        .sort((a, b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
+      
+      if (metricRecords.length >= 5) {
+        const values = metricRecords.map(r => r.value);
+        const trendResult = analyzeTrends(values);
+        trends[metric] = trendResult.direction;
+      }
+    }
+
+    return trends;
+  }
+
+  private async getModelBenchmarks(): Promise<Record<string, { rank: number; score: number }>> {
+    return {
+      ctr: { rank: 1, score: 85 },
+      cpl: { rank: 3, score: 72 },
+      engagement_rate: { rank: 2, score: 78 }
+    };
+  }
+
+  private async getHistoricalData(records: KpiRecord[]): Promise<Array<{ date: Date; metrics: Record<string, number> }>> {
+    const dailyData = new Map<string, Record<string, number>>();
+    
+    records.forEach(record => {
+      if (!record.createdAt) return;
+      
+      const dateKey = record.createdAt.toISOString().split('T')[0];
+      if (!dailyData.has(dateKey)) {
+        dailyData.set(dateKey, {});
+      }
+      dailyData.get(dateKey)![record.metricName] = record.value;
+    });
+
+    return Array.from(dailyData.entries())
+      .map(([dateStr, metrics]) => ({
+        date: new Date(dateStr),
+        metrics
+      }))
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .slice(-30); // Derniers 30 jours
   }
 }
 

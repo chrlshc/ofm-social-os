@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "KPI tracking, analysis and dashboard system for OFM Social OS",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "dev": "nodemon --exec ts-node src/server.ts",
     "build": "tsc",
