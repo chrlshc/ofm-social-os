@@ -1,0 +1,41 @@
+{
+  "proxies": [
+    {
+      "host": "proxy1.example.com",
+      "port": 8080,
+      "username": "user",
+      "password": "pass",
+      "type": "residential",
+      "location": "US-NY",
+      "provider": "provider_name"
+    },
+    {
+      "host": "proxy2.example.com",
+      "port": 8080,
+      "username": "user",
+      "password": "pass",
+      "type": "residential",
+      "location": "US-CA",
+      "provider": "provider_name"
+    },
+    {
+      "host": "proxy3.example.com",
+      "port": 8080,
+      "username": "user",
+      "password": "pass",
+      "type": "residential",
+      "location": "US-TX",
+      "provider": "provider_name"
+    },
+    {
+      "host": "proxy4.example.com",
+      "port": 8080,
+      "username": "user",
+      "password": "pass",
+      "type": "mobile",
+      "location": "US-FL",
+      "provider": "provider_name"
+    }
+  ],
+  "updated": "2024-01-01T00:00:00.000Z"
+}
