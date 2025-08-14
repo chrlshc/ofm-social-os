@@ -19,14 +19,19 @@
     "audit-prod": "npm audit --production --audit-level=high",
     "check-updates": "npm outdated",
     "security-check": "npm ci --omit=dev && npm audit --production --audit-level=high",
-    "test": "echo 'Installation successful!'"
+    "test": "echo 'Installation successful!'",
+    "apify:hashtag": "node src/apify-discover-export.mjs hashtag --q onlyfanscreator --limit 200 --out ../../out/dm_todo.csv",
+    "apify:export": "node src/apify-discover-export.mjs export --in ../../out/apify_dataset.json --out ../../out/dm_todo.csv"
   },
   "dependencies": {
     "apify": "^3.4.4",
+    "apify-client": "^2.13.0",
     "crawlee": "^3.14.1",
+    "csv-writer": "^1.6.0",
     "dotenv": "16.4.5",
     "fingerprint-injector": "2.1.69",
     "ghost-cursor": "1.4.1",
+    "mustache": "^4.2.0",
     "pino": "9.3.2",
     "pino-pretty": "11.2.2",
     "puppeteer": "24.9.0",
