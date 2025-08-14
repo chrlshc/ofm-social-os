@@ -35,7 +35,14 @@
     "natural:test": "node src/cli-dm-natural.mjs test",
     "fast:blast": "node src/cli-fast-tempo.mjs blast",
     "fast:handoff": "node src/cli-fast-tempo.mjs handoff",
-    "fast:stats": "node src/cli-fast-tempo.mjs stats"
+    "fast:stats": "node src/cli-fast-tempo.mjs stats",
+    "enhanced:campaign": "node src/cli-enhanced.mjs campaign",
+    "enhanced:check-replies": "node src/cli-enhanced.mjs check-replies",
+    "enhanced:stats": "node src/cli-enhanced.mjs stats",
+    "enhanced:accounts": "node src/cli-enhanced.mjs accounts",
+    "enhanced:test": "node src/cli-enhanced.mjs test-message",
+    "enhanced:db-init": "node src/cli-enhanced.mjs db-init",
+    "enhanced:db-stats": "node src/cli-enhanced.mjs db-stats"
   },
   "dependencies": {
     "apify": "^3.4.4",
@@ -46,6 +53,8 @@
     "fingerprint-injector": "2.1.69",
     "ghost-cursor": "1.4.1",
     "mustache": "^4.2.0",
+    "node-fetch": "^3.3.2",
+    "pg": "^8.11.3",
     "pino": "9.3.2",
     "pino-pretty": "11.2.2",
     "puppeteer": "24.9.0",

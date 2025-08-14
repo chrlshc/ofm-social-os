@@ -1,0 +1,52 @@
+{
+  "accounts": [
+    {
+      "username": "model_account_1",
+      "password": "your_password_here",
+      "proxy": "http://proxy1.provider.com:8080",
+      "cookies": null,
+      "maxDmsPerHour": 6,
+      "maxDmsPerDay": 50,
+      "tags": ["warm", "primary"],
+      "metadata": {
+        "createdDate": "2024-01-01",
+        "niche": "fitness"
+      }
+    },
+    {
+      "username": "model_account_2",
+      "password": "your_password_here",
+      "proxy": "http://proxy2.provider.com:8080",
+      "cookies": null,
+      "maxDmsPerHour": 6,
+      "maxDmsPerDay": 50,
+      "tags": ["new", "secondary"],
+      "metadata": {
+        "createdDate": "2024-12-01",
+        "niche": "lifestyle"
+      }
+    },
+    {
+      "username": "model_account_3",
+      "password": "your_password_here",
+      "proxy": "http://proxy3.provider.com:8080",
+      "cookies": null,
+      "maxDmsPerHour": 8,
+      "maxDmsPerDay": 60,
+      "tags": ["warm", "high-performing"],
+      "metadata": {
+        "createdDate": "2023-06-15",
+        "niche": "fashion"
+      }
+    }
+  ],
+  "settings": {
+    "defaultMaxDmsPerHour": 6,
+    "defaultMaxDmsPerDay": 50,
+    "rotationStrategy": "weighted",
+    "fastTempo": true,
+    "pauseBetweenAccounts": 5000,
+    "proxyProvider": "your_provider_name",
+    "notes": "Update with your actual Instagram accounts and proxy details"
+  }
+}
