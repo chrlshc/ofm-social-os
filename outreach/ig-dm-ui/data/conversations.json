@@ -1,0 +1,33 @@
+{
+  "conversations": [
+    {
+      "id": "test_account-test_user",
+      "target": "test_user",
+      "account": "test_account",
+      "messages": [
+        {
+          "type": "sent",
+          "text": "hey girl! love your content 😍",
+          "timestamp": "2025-08-14T23:03:31.889Z"
+        },
+        {
+          "type": "received",
+          "text": "thanks! what is this about?",
+          "timestamp": "2025-08-14T23:03:31.890Z"
+        }
+      ],
+      "status": "replied",
+      "created": "2025-08-14T23:03:31.890Z",
+      "lastActivity": "2025-08-14T23:03:31.890Z",
+      "metadata": {
+        "preEngagement": false,
+        "messageSource": "template"
+      },
+      "sentiment": "curious",
+      "sentimentScore": 80,
+      "intent": "needs_info",
+      "replyTimeMinutes": 0
+    }
+  ],
+  "updated": "2025-08-14T23:03:31.890Z"
+}

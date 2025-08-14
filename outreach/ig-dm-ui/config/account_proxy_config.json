@@ -1,0 +1,39 @@
+{
+  "accounts": [
+    {
+      "username": "test_account_1",
+      "password": "test_password",
+      "proxy": "http://proxy1.example.com:8080",
+      "cookies": null,
+      "maxDmsPerHour": 6,
+      "maxDmsPerDay": 50,
+      "tags": ["warm", "primary"],
+      "metadata": {
+        "createdDate": "2024-01-01",
+        "niche": "fitness"
+      }
+    },
+    {
+      "username": "test_account_2",
+      "password": "test_password",
+      "proxy": "http://proxy2.example.com:8080",
+      "cookies": null,
+      "maxDmsPerHour": 6,
+      "maxDmsPerDay": 50,
+      "tags": ["new", "secondary"],
+      "metadata": {
+        "createdDate": "2024-12-01",
+        "niche": "lifestyle"
+      }
+    }
+  ],
+  "settings": {
+    "defaultMaxDmsPerHour": 6,
+    "defaultMaxDmsPerDay": 50,
+    "rotationStrategy": "weighted",
+    "fastTempo": true,
+    "pauseBetweenAccounts": 5000,
+    "proxyProvider": "test_provider",
+    "notes": "Test configuration"
+  }
+}

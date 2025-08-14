@@ -1,0 +1,124 @@
+{
+  "greetings": [
+    "hey {{name}}!",
+    "hii {{name}}",
+    "{{name}}!!",
+    "heyyy",
+    "hiii girl",
+    "hey babe",
+    "heyy gorgeous"
+  ],
+  
+  "compliments": {
+    "general": [
+      "just saw your content and omg 😍",
+      "your posts are fireee 🔥",
+      "loving your vibe!",
+      "your content is amazing!!",
+      "obsessed with your feed",
+      "you're killing it!!",
+      "your page is goals"
+    ],
+    
+    "specific": {
+      "fitness": [
+        "your workout posts are insane",
+        "fitness goals fr 💪",
+        "that gym content tho",
+        "body goals honestly",
+        "your fitness journey is inspiring"
+      ],
+      "fashion": [
+        "your style is everything",
+        "outfit goals always",
+        "your fashion sense >>>",
+        "always slaying the looks",
+        "style icon fr"
+      ],
+      "beauty": [
+        "makeup on point always",
+        "your beauty content 😍",
+        "glowing literally",
+        "skin goals",
+        "beauty queen vibes"
+      ],
+      "lifestyle": [
+        "living your best life i see",
+        "your lifestyle content >>>",
+        "aesthetic is perfect",
+        "life goals honestly",
+        "your vibe is immaculate"
+      ],
+      "travel": [
+        "travel content is elite",
+        "wanderlust vibes",
+        "living the dream",
+        "travel goals fr",
+        "your adventures >>>"
+      ]
+    }
+  },
+  
+  "closings": [
+    "you're killing it!!",
+    "keep slaying 💕",
+    "love your energy",
+    "you're gorgeous!!",
+    "stunning as always",
+    "queen energy",
+    "absolutely love it"
+  ],
+  
+  "emojis": {
+    "positive": ["😍", "🔥", "💕", "✨", "💗", "🥰", "💖", "❤️", "💯"],
+    "excitement": ["!!", "!!!", "🔥🔥", "👀", "🙌"],
+    "casual": ["haha", "lol", "fr", "tho", "ngl"]
+  },
+  
+  "personalization": {
+    "location": {
+      "miami": ["miami girls different", "305 vibes", "miami energy", "south beach queen"],
+      "nyc": ["ny girls >>", "nyc energy unmatched", "manhattan vibes", "brooklyn baddie"],
+      "la": ["la girls winning", "west coast vibes", "cali girl energy", "hollywood dreams"],
+      "chicago": ["chi town represent", "midwest beauty", "chicago girls >>", "windy city vibes"],
+      "atlanta": ["atl energy", "georgia peach", "atlanta girls different", "southern belle"],
+      "vegas": ["vegas vibes", "sin city energy", "vegas girls >>", "desert queen"],
+      "dallas": ["texas girls >>", "dallas energy", "southern charm", "texas beauty"],
+      "phoenix": ["desert beauty", "arizona vibes", "phoenix rising", "southwest queen"]
+    },
+    
+    "recent_post": {
+      "beach": ["beach pics are everything", "beach goddess fr", "ocean vibes", "mermaid energy"],
+      "gym": ["gym pics go hard", "fitness queen", "workout motivation", "gains looking good"],
+      "food": ["foodie content >>", "making me hungry", "food goals", "culinary queen"],
+      "travel": ["travel content is elite", "wanderlust vibes", "travel goals", "adventure queen"],
+      "selfie": ["selfie game strong", "face card never declines", "gorgeous selfie", "stunning"],
+      "outfit": ["outfit is fire", "style goals", "fashion killa", "outfit on point"],
+      "makeup": ["makeup is flawless", "beauty guru vibes", "makeup goals", "glam queen"],
+      "party": ["party pics >>", "living your best life", "party queen", "nightlife goals"]
+    }
+  },
+  
+  "variations": {
+    "time_based": {
+      "morning": ["good morning sunshine", "morning gorgeous", "early bird vibes", "rise and slay"],
+      "afternoon": ["hey beautiful", "afternoon vibes", "hey hun", "midday beauty"],
+      "evening": ["evening gorgeous", "night owl?", "hey babe", "evening vibes"],
+      "night": ["night vibes", "late night energy", "still up?", "night queen"]
+    },
+    
+    "engagement_level": {
+      "high": ["your engagement is insane", "going viral queen", "algorithm loves you", "trending always"],
+      "medium": ["love how active you are", "your community >>", "engagement goals", "building something special"],
+      "growing": ["love watching you grow", "on the come up", "future star", "growth is real"]
+    }
+  },
+  
+  "ai_instructions": {
+    "tone": "casual, friendly, authentic, like one creator complimenting another",
+    "length": "keep under 80 characters",
+    "avoid": ["business", "opportunity", "offer", "link", "click", "sale", "deal", "platform", "service"],
+    "include": ["genuine compliment", "specific detail if possible", "1-2 emojis max", "casual language"],
+    "style": "lowercase preferred, informal, use common abbreviations (ur, u, etc)"
+  }
+}

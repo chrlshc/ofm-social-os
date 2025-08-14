@@ -71,7 +71,10 @@ async function runCampaign() {
   console.log(`   Pre-engagement: ${!hasFlag('no-likes') ? 'Yes' : 'No'}`);
   console.log(`   Database: ${!hasFlag('no-db') ? 'Yes' : 'No'}`);
   
-  if (hasFlag('dry-run')) {
+  // Default to dry-run unless explicitly disabled
+  const isDryRun = !hasFlag('no-dry-run');
+  
+  if (isDryRun) {
     console.log('\n🏃 DRY RUN MODE - Preview only\n');
     
     // Preview distribution
@@ -94,6 +97,27 @@ async function runCampaign() {
   }
   
   // Confirm before running
+  // Require explicit confirmation for real sends
+  if (!isDryRun && !hasFlag('yes') && !hasFlag('confirm')) {
+    console.log(`\n⚠️  WARNING: This will send REAL DMs to ${selectedTargets.length} accounts!\n`);
+    console.log('Type YES to proceed or anything else to cancel:');
+    
+    const readline = await import('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
+    const answer = await new Promise(resolve => {
+      rl.question('> ', resolve);
+    });
+    rl.close();
+    
+    if (answer.trim() !== 'YES') {
+      console.log('\n❌ Campaign cancelled');
+      process.exit(0);
+    }
+  }
   if (!hasFlag('yes')) {
     console.log('\nPress Enter to start campaign or Ctrl+C to cancel...');
     await new Promise(resolve => process.stdin.once('data', resolve));

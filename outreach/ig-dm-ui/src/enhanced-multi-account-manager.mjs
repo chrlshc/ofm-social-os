@@ -13,6 +13,14 @@ export class EnhancedMultiAccountManager {
   constructor(configPath = path.join(__dirname, '../config/account_proxy_config.json')) {
     this.configPath = configPath;
     this.accounts = [];
+    // Backpressure configuration
+    this.backpressure = {
+      enabled: true,
+      highThreshold: 0.10, // 10% reply rate
+      lowThreshold: 0.04,  // 4% reply rate
+      slowTempo: { min: 120000, max: 240000 }, // 2-4 minutes
+      fastTempo: { min: 45000, max: 120000 }   // 45s-2 minutes
+    };
     this.accountStatus = new Map();
     this.accountMetrics = new Map();
     this.loadConfiguration();
@@ -373,6 +381,32 @@ export class EnhancedMultiAccountManager {
   /**
    * Get account statistics
    */
+  
+  
+  /**
+   * Apply backpressure based on reply rate
+   */
+  async applyBackpressure() {
+    if (!this.backpressure.enabled || !this.database) return;
+    
+    try {
+      const replyRate = await this.database.getRecentReplyRate(30);
+      console.log(`📊 Current reply rate: ${(replyRate * 100).toFixed(1)}%`);
+      
+      if (replyRate > this.backpressure.highThreshold) {
+        // Slow down
+        this.currentTempo = this.backpressure.slowTempo;
+        console.log('🐌 Backpressure: Slowing down tempo (high reply rate)');
+      } else if (replyRate < this.backpressure.lowThreshold) {
+        // Speed up
+        this.currentTempo = this.backpressure.fastTempo;
+        console.log('🚀 Backpressure: Speeding up tempo (low reply rate)');
+      }
+    } catch (error) {
+      console.error('Backpressure check failed:', error);
+    }
+  }
+
   getAccountStats() {
     const stats = {
       total: this.accounts.length,

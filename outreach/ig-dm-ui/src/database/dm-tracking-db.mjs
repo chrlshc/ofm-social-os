@@ -578,6 +578,27 @@ export class DMTrackingDatabase {
   /**
    * Close database connection
    */
+  
+  
+  /**
+   * Calculate recent reply rate for backpressure
+   */
+  async getRecentReplyRate(minutes = 30) {
+    const query = `
+      WITH recent_sent AS (
+        SELECT id FROM dm_outreach_logs
+        WHERE sent_at > NOW() - INTERVAL '${minutes} minutes'
+      )
+      SELECT 
+        COUNT(DISTINCT r.id)::float / GREATEST(COUNT(DISTINCT s.id), 1)::float AS reply_rate
+      FROM recent_sent s
+      LEFT JOIN dm_replies r ON r.outreach_log_id = s.id
+    `;
+    
+    const result = await this.client.query(query);
+    return result.rows[0]?.reply_rate || 0;
+  }
+
   async close() {
     await this.pool.end();
   }

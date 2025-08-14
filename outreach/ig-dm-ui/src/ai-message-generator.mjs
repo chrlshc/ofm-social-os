@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
  */
 export class AIMessageGenerator {
   constructor(options = {}) {
+    this.bannedTerms = /\b(price|pricing|pay|payout|subscription|subscribe|trial|beta\s*link|link in bio|join now|discount|promo|coupon|offer|deal)\b/i;
     this.apiKey = options.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
     this.apiType = options.apiType || (process.env.OPENAI_API_KEY ? 'openai' : 'anthropic');
     this.templatesPath = options.templatesPath || path.join(__dirname, '../config/message_templates.json');

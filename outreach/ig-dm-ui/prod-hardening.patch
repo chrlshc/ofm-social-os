@@ -1,0 +1,311 @@
+--- a/outreach/ig-dm-ui/src/ai-message-generator.mjs
++++ b/outreach/ig-dm-ui/src/ai-message-generator.mjs
+@@ -100,14 +100,32 @@ export class AIMessageGenerator {
+     const {
+       name = null,
+       location = null,
+       niche = null,
+       recent_post = null,
+       style = 'auto',
+       fallbackTemplateFn,
+       ai = globalAIClient
+     } = ctx;
++    // 0) small helper to hard-guard first messages (no pitch)
++    const banned = /\b(price|pricing|pay|payout|subscription|subscribe|trial|beta\s*link|link in bio|join now|discount|promo|coupon|offer|deal)\b/i;
++
+     // 1) Try AI
+     try {
+       const prompt = buildPrompt({ name, location, niche, recent_post, style });
+       const msg = await ai.oneLiner(prompt);
+-      if (msg && msg.length < 220) return msg.trim();
++      if (msg && msg.length < 220) {
++        const safe = msg.trim();
++        if (banned.test(safe)) {
++          // hard guard → regenerate once, else fallback
++          const alt = await ai.oneLiner(prompt + '\nConstraints: no pricing/sales/promo words; keep casual.');
++          if (alt && alt.length < 220 && !banned.test(alt)) return alt.trim();
++          if (typeof fallbackTemplateFn === 'function') return fallbackTemplateFn({ name, location, niche, recent_post });
++        }
++        return safe;
++      }
+     } catch (_) { /* fallthrough */ }
+   
+     // 2) Fallback
+     if (typeof fallbackTemplateFn === 'function') {
+-      return fallbackTemplateFn({ name, location, niche, recent_post });
++      const tmp = fallbackTemplateFn({ name, location, niche, recent_post });
++      return banned.test(tmp) ? scrubPitch(tmp) : tmp;
+     }
+     // 3) Last resort
+     return 'hey! just saw your content — it's super nice ✨';
+   }
++  
++  function scrubPitch(s) {
++    // if a legacy template contained a forbidden word, neutralize softly
++    return s.replace(/\b(price|pricing|subscription|subscribe|trial|beta\s*link|discount|promo|coupon|offer|deal)\b/gi, 'details');
++  }
+ 
+ --- a/outreach/ig-dm-ui/src/database/dm-tracking-db.mjs
++++ b/outreach/ig-dm-ui/src/database/dm-tracking-db.mjs
+@@ -100,6 +100,25 @@ export class DMTrackingDatabase {
+         sent INT DEFAULT 0,
+         replied INT DEFAULT 0
+       );
++      -- Idempotence: avoid re-DM same user within same campaign
++      DO $$
++      BEGIN
++        IF NOT EXISTS (
++          SELECT 1 FROM pg_indexes WHERE indexname = 'uniq_campaign_user'
++        ) THEN
++          CREATE UNIQUE INDEX uniq_campaign_user ON dm_outreach_logs (campaign_id, username);
++        END IF;
++      END$$;
++      -- Fast lookups on recent activity
++      CREATE INDEX IF NOT EXISTS idx_outreach_sent_at ON dm_outreach_logs(sent_at);
++      CREATE INDEX IF NOT EXISTS idx_replies_reply_at ON dm_replies(reply_at);
+     `);
+   }
+   
+@@ -200,10 +219,28 @@ export class DMTrackingDatabase {
+   async insertOutreach(row) {
+     const { campaign_id, username, account, template_id = null, message } = row;
+     const q = `INSERT INTO dm_outreach_logs (campaign_id, username, account, template_id, message)
+-               VALUES ($1,$2,$3,$4,$5) RETURNING id`;
++               VALUES ($1,$2,$3,$4,$5)
++               ON CONFLICT ON CONSTRAINT uniq_campaign_user DO NOTHING
++               RETURNING id`;
+     const { rows } = await this.client.query(q, [campaign_id, username, account, template_id, message]);
+     return rows[0]?.id ?? null;
+   }
++  
++  async recentReplyRate(minutes = 30) {
++    const { rows } = await this.client.query(`
++      WITH sent AS (
++        SELECT id, sent_at FROM dm_outreach_logs
++        WHERE sent_at > NOW() - INTERVAL '${minutes} minutes'
++      )
++      SELECT
++        (SELECT COUNT(*) FROM dm_replies r JOIN sent s ON s.id = r.outreach_log_id)::float
++        /
++        GREATEST((SELECT COUNT(*) FROM sent),1)::float
++        AS reply_rate
++    `);
++    return Number(rows[0]?.reply_rate ?? 0);
++  }
+ 
+ --- a/outreach/ig-dm-ui/src/enhanced-multi-account-manager.mjs
++++ b/outreach/ig-dm-ui/src/enhanced-multi-account-manager.mjs
+@@ -100,6 +100,7 @@ export class EnhancedMultiAccountManager {
+     this.accounts = opts.accounts; // [{username, proxy, weight, ...}]
+     this.tempo = { min: 45, max: 120 }; // seconds, fast by default
+     this.pg = opts.pg;
+     this.logger = opts.logger || console;
+     this.windowMin = opts.windowMin || 30;
+     this.guard = opts.guard || { hourlyCap: 28, dailyCap: 180 }; // per account
++    this.backpressure = { enabled: true, hi: 0.10, lo: 0.04, slow: [120, 240], fast: [45, 120] };
+   }
+   
+   async tick() {
++    // Backpressure: adapt tempo to live reply rate
++    if (this.backpressure.enabled && this.pg) {
++      try {
++        const rr = await this.pg.recentReplyRate(this.windowMin);
++        if (rr > this.backpressure.hi) {
++          [this.tempo.min, this.tempo.max] = this.backpressure.slow;
++          this.logger.info(`[bp] reply_rate=${(rr*100).toFixed(1)}% → slow tempo ${this.tempo.min}-${this.tempo.max}s`);
++        } else if (rr < this.backpressure.lo) {
++          [this.tempo.min, this.tempo.max] = this.backpressure.fast;
++        }
++      } catch (e) {
++        this.logger.warn('backpressure check failed:', e.message);
++      }
++    }
+     // ... continue existing scheduling (per-account token bucket, distribution, etc.)
+   }
+ 
+ --- a/outreach/ig-dm-ui/src/enhanced-reply-monitor.mjs
++++ b/outreach/ig-dm-ui/src/enhanced-reply-monitor.mjs
+@@ -400,6 +400,28 @@ export class EnhancedReplyMonitor {
+     return 'low';
+   }
+   
++  closerHint(intent, sentiment) {
++    const i = (intent||'').toLowerCase();
++    const s = (sentiment||'').toLowerCase();
++    if (i.includes('pricing')) return 'Ask budget range; offer light ROI example; propose async trial.';
++    if (i.includes('curious') || s.includes('positive')) return 'Acknowledge; share 1-liner value; ask for preferred contact (DM/email).';
++    if (s.includes('negative')) return 'Thank and park; offer to keep a gamma slot later.';
++    return 'Probe with 1 question; avoid pitch; keep it friendly.';
++  }
++  
++  tzGuess(username = '', text = '') {
++    // Very light US timezone guess from text/user name hints
++    const ET = /(new york|nyc|miami|boston|philly|atlanta|orlando|tampa|dc)\b/i;
++    const CT = /(chicago|houston|dallas|austin|nashville|detroit|minneapolis|saint louis|st\.? louis)\b/i;
++    const MT = /\b(denver|salt lake|boise)\b/i;
++    const PT = /(los angeles|la\b|san diego|san francisco|\bsf\b|seattle|portland|vegas|las vegas)\b/i;
++    
++    const pool = `${username} • ${text}`;
++    if (ET.test(pool)) return 'ET';
++    if (CT.test(pool)) return 'CT';
++    if (MT.test(pool)) return 'MT';
++    if (PT.test(pool)) return 'PT';
++    return null;
++  }
++  
+   /**
+    * Generate handoff report
+    */
+@@ -420,7 +442,9 @@ export class EnhancedReplyMonitor {
+     
+     // Create CSV writer
+     const csvWriter = createObjectCsvWriter({
+       path: outputPath,
+-      header: [
++      header: this.getHandoffHeaders()
++    });
++    
++    const records = handoffData.map(conv => this.formatHandoffRecord(conv));
++    
++    await csvWriter.writeRecords(records);
++    
++    console.log(`✅ Handoff report generated: ${outputPath}`);
++    console.log(`   Total: ${handoffData.length} conversations`);
++    console.log(`   Replied: ${handoffData.filter(c => c.replied).length}`);
++    
++    return handoffData;
++  }
++  
++  getHandoffHeaders() {
++    return [
+         { id: 'username', title: 'username' },
+         { id: 'from_account', title: 'from_account' },
+         { id: 'message_intro', title: 'message_intro' },
+@@ -428,7 +452,11 @@ export class EnhancedReplyMonitor {
+         { id: 'intent', title: 'intent' },
+         { id: 'sentiment', title: 'sentiment' },
+         { id: 'priority', title: 'priority' },
+-        { id: 'next_action', title: 'next_action' }
+-      ]
+-    });
++        { id: 'next_action', title: 'next_action' },
++        { id: 'first_response_latency_sec', title: 'first_response_latency_sec' },
++        { id: 'tz', title: 'tz' },
++        { id: 'closer_hint', title: 'closer_hint' }
++    ];
++  }
++  
++  formatHandoffRecord(conv) {
++    const latency = conv.replyTime ? Math.max(0, Math.round(conv.replyTime * 60)) : '';
++    const tz = this.tzGuess(conv.target, conv.replyText || conv.message) || 'ET';
++    const hint = this.closerHint(conv.intent, conv.sentiment);
+     
+-    const records = handoffData.map(conv => ({
++    return {
+       username: conv.target,
+       from_account: conv.account,
+       message_intro: conv.message,
+@@ -430,7 +458,10 @@ export class EnhancedReplyMonitor {
+       intent: conv.intent || '',
+       sentiment: conv.sentiment || '',
+       priority: conv.priority || this.getPriority(conv.sentiment, conv.intent),
+-      next_action: this.getNextAction(conv)
+-    }));
+-    
+-    await csvWriter.writeRecords(records);
+-    
+-    console.log(`✅ Handoff report generated: ${outputPath}`);
+-    console.log(`   Total: ${handoffData.length} conversations`);
+-    console.log(`   Replied: ${handoffData.filter(c => c.replied).length}`);
+-    
+-    return handoffData;
++      next_action: this.getNextAction(conv),
++      first_response_latency_sec: latency,
++      tz: tz,
++      closer_hint: hint
++    };
+   }
+ 
+ --- a/outreach/ig-dm-ui/src/cli-enhanced.mjs
++++ b/outreach/ig-dm-ui/src/cli-enhanced.mjs
+@@ -60,11 +60,11 @@ async function runCampaign() {
+   await orchestrator.initialize();
+   
+   // Load targets
+   const targetsFile = arg('targets', path.join(__dirname, '../out/dm_todo_us.csv'));
+   const targets = await loadTargets(targetsFile);
+   const maxTargets = Number(arg('max', '50'));
+   const selectedTargets = targets.slice(0, maxTargets);
+   
+   console.log(`\n📋 Campaign Configuration:`);
+   console.log(`   Targets: ${selectedTargets.length}/${targets.length}`);
+   console.log(`   Tempo: ${arg('tempo', 'fast')}`);
+   console.log(`   AI Messages: ${!hasFlag('no-ai') ? 'Yes' : 'No'}`);
+   console.log(`   Pre-engagement: ${!hasFlag('no-likes') ? 'Yes' : 'No'}`);
+   console.log(`   Database: ${!hasFlag('no-db') ? 'Yes' : 'No'}`);
+   
+-  if (hasFlag('dry-run')) {
++  // Default to dry-run unless explicitly disabled
++  const isDryRun = !hasFlag('no-dry-run');
++  
++  if (isDryRun) {
+     console.log('\n🏃 DRY RUN MODE - Preview only\n');
+     
+     // Preview distribution
+@@ -94,8 +94,18 @@ async function runCampaign() {
+     return;
+   }
+   
+   // Confirm before running
+-  if (!hasFlag('yes')) {
+-    console.log('\nPress Enter to start campaign or Ctrl+C to cancel...');
+-    await new Promise(resolve => process.stdin.once('data', resolve));
++  if (!hasFlag('yes') && !hasFlag('confirm')) {
++    console.log(`\n⚠️  This will SEND up to ${selectedTargets.length} DMs to real accounts!`);
++    console.log('Type YES to proceed or anything else to cancel:');
++    
++    const readline = await import('readline');
++    const rl = readline.createInterface({
++      input: process.stdin,
++      output: process.stdout
++    });
++    
++    const answer = await new Promise(resolve => rl.question('> ', resolve));
++    rl.close();
++    
++    if (answer.trim() !== 'YES') {
++      console.log('❌ Campaign cancelled');
++      process.exit(0);
++    }
+   }
+   
+   // Run campaign
+@@ -331,6 +341,7 @@ Campaign Options:
+   --targets <file>        CSV file with targets (default: ../out/dm_todo_us.csv)
+   --max <number>          Maximum targets to process (default: 50)
+   --tempo <fast|normal|conservative>  Sending tempo (default: fast)
+   --no-ai                 Disable AI message generation
+   --no-likes              Skip pre-engagement (liking posts)
+   --no-db                 Don't use database tracking
++  --no-dry-run            Actually send DMs (default is dry-run mode)
+   --distribution <weighted|even>  Target distribution strategy
+   --accounts <file>       Account config file
+-  --dry-run               Preview without sending
+-  --yes                   Skip confirmation
++  --yes, --confirm        Skip confirmation prompt
+   --no-reply-check        Don't check replies after campaign
+   --reply-delay <min>     Minutes before checking replies (default: 10)
+ 
+ Examples:
+-  # Run fast campaign with 100 targets
+-  node cli-enhanced.mjs campaign --max 100 --tempo fast
++  # Preview campaign (dry run - default)
++  node cli-enhanced.mjs campaign --max 20
+ 
+-  # Dry run to preview
+-  node cli-enhanced.mjs campaign --dry-run --max 20
++  # Actually send DMs (requires confirmation)
++  node cli-enhanced.mjs campaign --max 100 --tempo fast --no-dry-run
+ 
+   # Check replies and generate handoff
+   node cli-enhanced.mjs check-replies --handoff

@@ -476,6 +476,43 @@ export class EnhancedReplyMonitor {
   /**
    * Get conversation statistics
    */
+  
+  
+  /**
+   * Guess US timezone from username/text
+   */
+  guessTimezone(username, text = '') {
+    const combined = `${username} ${text}`.toLowerCase();
+    
+    const timezones = {
+      ET: /(new york|nyc|miami|boston|philly|atlanta|orlando|tampa|dc|washington)/,
+      CT: /(chicago|houston|dallas|austin|nashville|detroit|minneapolis|st\.?\s*louis)/,
+      MT: /(denver|salt lake|phoenix|albuquerque|boise)/,
+      PT: /(los angeles|la\b|san diego|san francisco|sf\b|seattle|portland|vegas|las vegas)/
+    };
+    
+    for (const [tz, pattern] of Object.entries(timezones)) {
+      if (pattern.test(combined)) return tz;
+    }
+    
+    return 'ET'; // Default to Eastern
+  }
+  
+  /**
+   * Generate closer hint based on intent
+   */
+  getCloserHint(intent, sentiment) {
+    const hints = {
+      'pricing': 'Ask budget range; offer light ROI example; propose async trial.',
+      'curious': 'Acknowledge; share 1-liner value; ask for preferred contact.',
+      'positive': 'Build rapport; share success story; soft pitch allowed.',
+      'negative': 'Thank and park; offer to keep a gamma slot later.',
+      'neutral': 'Probe with 1 question; avoid pitch; keep it friendly.'
+    };
+    
+    return hints[intent] || hints[sentiment] || hints.neutral;
+  }
+
   getStatistics() {
     const stats = {
       total: this.conversations.size,
@@ -533,7 +570,7 @@ export class EnhancedReplyMonitor {
     const cutoff = Date.now() - (daysOld * 24 * 60 * 60 * 1000);
     let removed = 0;
     
-    for (const [id, conversation of this.conversations) {
+    for (const [id, conversation] of this.conversations) {
       const age = Date.now() - new Date(conversation.created).getTime();
       if (age > cutoff) {
         this.conversations.delete(id);
