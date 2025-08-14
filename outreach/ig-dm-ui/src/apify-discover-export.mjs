@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import Mustache from 'mustache';
 import { createObjectCsvWriter } from 'csv-writer';
 import { ApifyDiscoveryProvider } from './apify-provider.mjs';
+import { isUSLike, inferTimezoneFromText } from './us-lexicon.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,100 +16,204 @@ function arg(name, def) {
   return i > -1 ? process.argv[i+1] : def;
 }
 
-function score(c, minFollowers=3000) {
+// Configuration flags
+const US_ONLY = ['1','true','yes'].includes((arg('usOnly')||'').toLowerCase());
+const TZ_DEFAULT = arg('tzDefault','ET');
+const MIN_FOLLOWERS = Number(arg('minFollowers', '3000'));
+const MIN_SCORE = Number(arg('minScore', '2'));
+const TOP_K = Number(arg('top', '300'));
+
+function score(c, minFollowers=MIN_FOLLOWERS) {
   let s = 0;
   if ((c.followers ?? 0) >= minFollowers) s += 2;
-  if ((c.caption||'').match(/(collab|agency|manager|growth|ugc)/i)) s += 1;
+  if ((c.caption||'').match(/(collab|agency|manager|growth|ugc|creator|brand|deals)/i)) s += 1;
   if (c.url) s += 1;
   return s;
 }
 
+function guessUS(meta) {
+  const pool = [
+    meta.caption || '',
+    meta.ownerBiography || '',
+    meta.bio || ''
+  ].join(' • ');
+  const isUS = isUSLike(pool);
+  const tz = inferTimezoneFromText(pool) || TZ_DEFAULT;
+  return { isUS, tz };
+}
+
 function loadTemplates() {
-  // utilise tes templates existants à la racine outreach/
   const tplPath = path.resolve(__dirname, '../../saas-closer-templates.json');
   const raw = fs.readFileSync(tplPath, 'utf8');
   return JSON.parse(raw);
 }
 
-function renderMsg(username, lang='fr') {
+function renderMsg(username, lang='en') {
   const TPL = loadTemplates();
   const raw = TPL.templates?.R1_VALUE_PROP?.[lang] || TPL.templates?.R1_VALUE_PROP?.en;
   return Mustache.render(raw, { username, signup_link: 'https://example.com/beta' });
 }
 
 async function runHashtag() {
-  const q = arg('q', 'onlyfanscreator');
-  const limit = Number(arg('limit', '200'));
-  const out = path.resolve(__dirname, arg('out', '../../out/dm_todo.csv'));
+  const hashtags = arg('hashtags', 'onlyfansusa,ugcmodel,miamimodel,nycmodel');
+  const limit = Number(arg('limit', '150'));
+  const out = path.resolve(__dirname, arg('out', '../../out/dm_todo_us.csv'));
   const provider = new ApifyDiscoveryProvider({ token: process.env.APIFY_TOKEN });
 
-  console.log(`🔎 Apify discovery hashtag #${q} (limit ${limit})`);
-  const list = await provider.discoverByHashtag(q, limit);
+  // Parse multiple hashtags
+  const listQs = hashtags.split(',').map(h => h.trim()).filter(Boolean);
+  
+  console.log(`🔎 Apify discovery for US market`);
+  console.log(`📌 Hashtags: ${listQs.join(', ')}`);
+  console.log(`🎯 Settings: limit=${limit}/hashtag, minFollowers=${MIN_FOLLOWERS}, minScore=${MIN_SCORE}, top=${TOP_K}`);
+  if (US_ONLY) console.log(`🇺🇸 US-only filter enabled`);
 
-  // dedupe + score
+  // Collect from all hashtags
+  let all = [];
+  for (const h of listQs) {
+    console.log(`  → Fetching #${h}...`);
+    try {
+      const part = await provider.discoverByHashtag(h, limit);
+      all = all.concat(part);
+      console.log(`    ✓ Found ${part.length} profiles`);
+    } catch (e) {
+      console.error(`    ✗ Error with #${h}: ${e.message}`);
+    }
+  }
+
+  // Dedupe by username (case-insensitive)
   const byUser = new Map();
-  for (const it of list) if (it.username && !byUser.has(it.username)) byUser.set(it.username, it);
+  for (const it of all) {
+    const key = (it.username||'').toLowerCase();
+    if (!key) continue;
+    if (!byUser.has(key)) byUser.set(key, it);
+  }
+
+  // Score, filter US, and prepare rows
   const rows = [];
-  for (const [username, it] of byUser) {
+  let usFiltered = 0;
+  
+  for (const [usernameKey, it] of byUser) {
     const s = score(it);
-    if (s < 2) continue;
+    if (s < MIN_SCORE) continue;
+
+    // US filter + timezone guess
+    const meta = guessUS({ 
+      caption: it.caption, 
+      ownerBiography: it.ownerBiography || it.bio 
+    });
+    
+    if (US_ONLY && !meta.isUS) {
+      usFiltered++;
+      continue;
+    }
+
     rows.push({
-      username,
+      username: it.username,
       platform: 'instagram',
       followers: it.followers ?? '',
-      message: renderMsg(username, 'fr'),
-      score: s
+      message: renderMsg(it.username, 'en'), // English for US market
+      score: s,
+      tz: meta.tz
     });
   }
-  rows.sort((a,b)=>b.score-a.score);
 
-  // export CSV
+  // Sort by score and take top K
+  rows.sort((a,b) => b.score - a.score);
+  const top = rows.slice(0, TOP_K);
+
+  // Export CSV with timezone column
   const writer = createObjectCsvWriter({
     path: out,
     header: [
-      { id:'username', title:'username' },
-      { id:'platform', title:'platform' },
+      { id:'username',  title:'username' },
+      { id:'platform',  title:'platform' },
       { id:'followers', title:'followers' },
-      { id:'message', title:'message' }
+      { id:'message',   title:'message' },
+      { id:'tz',        title:'tz' }
     ]
   });
+  
   fs.mkdirSync(path.dirname(out), { recursive: true });
-  await writer.writeRecords(rows);
-  console.log(`✅ CSV prêt: ${out} (${rows.length} leads)`);
+  await writer.writeRecords(top);
+  
+  console.log(`\n📊 Results:`);
+  console.log(`  • Total profiles found: ${all.length}`);
+  console.log(`  • After dedup: ${byUser.size}`);
+  console.log(`  • Score qualified: ${rows.length}`);
+  if (US_ONLY) console.log(`  • US-filtered out: ${usFiltered}`);
+  console.log(`  • Top K exported: ${top.length}`);
+  console.log(`\n✅ CSV ready: ${out}`);
 }
 
 async function runExport() {
-  // Option: partir d'un JSON de dataset déjà exporté
   const inFile = path.resolve(__dirname, arg('in', '../../out/apify_dataset.json'));
-  const out = path.resolve(__dirname, arg('out', '../../out/dm_todo.csv'));
+  const out = path.resolve(__dirname, arg('out', '../../out/dm_todo_us.csv'));
   const json = JSON.parse(fs.readFileSync(inFile,'utf8'));
+  
   const byUser = new Map();
-  for (const it of json) if (it.ownerUsername && !byUser.has(it.ownerUsername)) byUser.set(it.ownerUsername, it);
+  for (const it of json) {
+    const key = (it.ownerUsername || it.username || '').toLowerCase();
+    if (!key) continue;
+    if (!byUser.has(key)) byUser.set(key, it);
+  }
+  
   const rows = [];
-  for (const [username, it] of byUser) {
-    const s = score({ followers: it.ownerFollowersCount, caption: it.caption, url: it.url });
-    if (s < 2) continue;
+  let usFiltered = 0;
+  
+  for (const [usernameKey, it] of byUser) {
+    const s = score({ 
+      followers: it.ownerFollowersCount || it.followers, 
+      caption: it.caption, 
+      url: it.url 
+    });
+    if (s < MIN_SCORE) continue;
+
+    // US filter + timezone guess
+    const meta = guessUS({ 
+      caption: it.caption, 
+      ownerBiography: it.ownerBiography || it.bio 
+    });
+    
+    if (US_ONLY && !meta.isUS) {
+      usFiltered++;
+      continue;
+    }
+
     rows.push({
-      username,
+      username: it.ownerUsername || it.username,
       platform: 'instagram',
-      followers: it.ownerFollowersCount ?? '',
-      message: renderMsg(username, 'fr'),
-      score: s
+      followers: it.ownerFollowersCount || it.followers || '',
+      message: renderMsg(it.ownerUsername || it.username, 'en'),
+      score: s,
+      tz: meta.tz
     });
   }
-  rows.sort((a,b)=>b.score-a.score);
+  
+  rows.sort((a,b) => b.score - a.score);
+  const top = rows.slice(0, TOP_K);
+  
   const writer = createObjectCsvWriter({
     path: out,
     header: [
-      { id:'username', title:'username' },
-      { id:'platform', title:'platform' },
+      { id:'username',  title:'username' },
+      { id:'platform',  title:'platform' },
       { id:'followers', title:'followers' },
-      { id:'message', title:'message' }
+      { id:'message',   title:'message' },
+      { id:'tz',        title:'tz' }
     ]
   });
+  
   fs.mkdirSync(path.dirname(out), { recursive: true });
-  await writer.writeRecords(rows);
-  console.log(`✅ CSV prêt: ${out} (${rows.length} leads)`);
+  await writer.writeRecords(top);
+  
+  console.log(`\n📊 Results:`);
+  console.log(`  • Total in dataset: ${json.length}`);
+  console.log(`  • After dedup: ${byUser.size}`);
+  console.log(`  • Score qualified: ${rows.length}`);
+  if (US_ONLY) console.log(`  • US-filtered out: ${usFiltered}`);
+  console.log(`  • Top K exported: ${top.length}`);
+  console.log(`\n✅ CSV ready: ${out}`);
 }
 
 const sub = process.argv[2];
@@ -116,6 +221,12 @@ if (sub === 'hashtag') runHashtag().catch(e=>{ console.error(e); process.exit(1)
 else if (sub === 'export') runExport().catch(e=>{ console.error(e); process.exit(1); });
 else {
   console.log(`Usage:
-  APIFY_TOKEN=xxx node src/apify-discover-export.mjs hashtag --q onlyfanscreator --limit 200 --out ../../out/dm_todo.csv
-  node src/apify-discover-export.mjs export --in ../../out/apify_dataset.json --out ../../out/dm_todo.csv`);
+  APIFY_TOKEN=xxx node src/apify-discover-export.mjs hashtag \\
+    --hashtags onlyfansusa,ugcmodel,miamimodel,nycmodel \\
+    --limit 150 --minFollowers 4000 --minScore 2 --top 300 \\
+    --usOnly true --tzDefault ET
+    
+  node src/apify-discover-export.mjs export \\
+    --in ../../out/apify_dataset.json --out ../../out/dm_todo_us.csv \\
+    --minFollowers 4000 --minScore 2 --top 300 --usOnly true`);
 }

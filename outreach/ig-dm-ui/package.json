@@ -21,7 +21,9 @@
     "security-check": "npm ci --omit=dev && npm audit --production --audit-level=high",
     "test": "echo 'Installation successful!'",
     "apify:hashtag": "node src/apify-discover-export.mjs hashtag --q onlyfanscreator --limit 200 --out ../../out/dm_todo.csv",
-    "apify:export": "node src/apify-discover-export.mjs export --in ../../out/apify_dataset.json --out ../../out/dm_todo.csv"
+    "apify:export": "node src/apify-discover-export.mjs export --in ../../out/apify_dataset.json --out ../../out/dm_todo.csv",
+    "apify:us": "node src/apify-discover-export.mjs hashtag --hashtags onlyfansusa,ugcmodel,miamimodel,nycmodel,lasvegasmodel,atlantamodel,californiacreator,texascreator --limit 150 --minFollowers 4000 --minScore 2 --top 300 --usOnly true --tzDefault ET --out ../../out/dm_todo_us.csv",
+    "apify:us-intent": "node src/apify-discover-export.mjs hashtag --hashtags collab,branddeals,creatorcommunity,ugcmodel,creatorlife --limit 150 --minFollowers 4000 --minScore 2 --top 300 --usOnly true --tzDefault ET --out ../../out/dm_todo_us_intent.csv"
   },
   "dependencies": {
     "apify": "^3.4.4",
