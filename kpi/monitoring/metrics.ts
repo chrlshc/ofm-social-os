@@ -283,6 +283,95 @@ export const benchmarkMetrics = {
 };
 
 /**
+ * Métriques Streaming et Backpressure
+ */
+export const streamingMetrics = {
+  // NATS/Streaming métriques
+  messagesPublished: new Counter({
+    name: 'kpi_nats_messages_published_total',
+    help: 'Total messages published to NATS',
+    labelNames: ['subject', 'status', 'priority'] // status: success, error; priority: low, medium, high, critical
+  }),
+
+  messagesConsumed: new Counter({
+    name: 'kpi_nats_messages_consumed_total',
+    help: 'Total messages consumed from NATS',
+    labelNames: ['stream', 'consumer']
+  }),
+
+  messagesDropped: new Counter({
+    name: 'kpi_streaming_messages_dropped_total',
+    help: 'Total messages dropped due to backpressure',
+    labelNames: ['reason', 'subject'] // reason: circuit_breaker, sampling, low_priority, queue_full, max_retries
+  }),
+
+  publishLatency: new Histogram({
+    name: 'kpi_nats_publish_latency_seconds',
+    help: 'Time to publish message to NATS',
+    labelNames: ['subject'],
+    buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25]
+  }),
+
+  consumerLag: new Gauge({
+    name: 'kpi_nats_consumer_lag',
+    help: 'Number of pending messages in consumer',
+    labelNames: ['stream', 'consumer']
+  }),
+
+  streamSize: new Gauge({
+    name: 'kpi_nats_stream_size_bytes',
+    help: 'Size of NATS stream in bytes',
+    labelNames: ['stream']
+  }),
+
+  // Backpressure metrics
+  backpressureLevel: new Gauge({
+    name: 'kpi_backpressure_degradation_level',
+    help: 'Current backpressure degradation level (0=none, 1=low, 2=medium, 3=high, 4=critical)'
+  }),
+
+  backpressureMemoryUsage: new Gauge({
+    name: 'kpi_backpressure_memory_usage_mb',
+    help: 'Current memory usage tracked by backpressure manager'
+  }),
+
+  backpressureQueueSize: new Gauge({
+    name: 'kpi_backpressure_queue_size',
+    help: 'Current internal queue size in backpressure manager'
+  }),
+
+  samplingRate: new Gauge({
+    name: 'kpi_backpressure_sampling_rate',
+    help: 'Current adaptive sampling rate (0-1)'
+  }),
+
+  circuitBreakerOpen: new Gauge({
+    name: 'kpi_circuit_breaker_open',
+    help: 'Circuit breaker status by subject (0=closed, 1=open)',
+    labelNames: ['subject']
+  }),
+
+  batchesProcessed: new Counter({
+    name: 'kpi_streaming_batches_processed_total',
+    help: 'Total batches processed by streaming system',
+    labelNames: ['subject', 'size'] // size buckets: small, medium, large
+  }),
+
+  // Adaptive windows metrics
+  adaptiveWindowConfidence: new Gauge({
+    name: 'kpi_adaptive_window_confidence',
+    help: 'Confidence score for adaptive window recommendations',
+    labelNames: ['model_name', 'metric_name']
+  }),
+
+  windowAdjustments: new Counter({
+    name: 'kpi_adaptive_window_adjustments_total',
+    help: 'Total automatic window adjustments',
+    labelNames: ['model_name', 'metric_name', 'direction'] // direction: increase, decrease
+  })
+};
+
+/**
  * Fonctions utilitaires pour instrumenter le code
  */
 export class MetricsHelper {
