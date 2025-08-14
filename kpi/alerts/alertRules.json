@@ -1,0 +1,188 @@
+{
+  "rules": [
+    {
+      "id": "marketing-ctr-low",
+      "modelName": "marketing",
+      "metricName": "ctr",
+      "threshold": 0.5,
+      "comparison": "lt",
+      "severity": "warning",
+      "message": "CTR en dessous du seuil critique de 0.5%",
+      "metadata": {
+        "timeWindow": "1 hour",
+        "aggregation": "avg",
+        "debounceMinutes": 60
+      }
+    },
+    {
+      "id": "marketing-cpl-high",
+      "modelName": "marketing",
+      "metricName": "cpl",
+      "threshold": 10,
+      "comparison": "gt",
+      "severity": "warning",
+      "message": "Coût par lead supérieur à 10€",
+      "metadata": {
+        "timeWindow": "30 minutes",
+        "aggregation": "avg",
+        "debounceMinutes": 30
+      }
+    },
+    {
+      "id": "marketing-conversion-critical",
+      "modelName": "marketing",
+      "metricName": "conversion_rate",
+      "threshold": 0.1,
+      "comparison": "lt",
+      "severity": "critical",
+      "message": "Taux de conversion extrêmement bas (<0.1%)",
+      "metadata": {
+        "timeWindow": "15 minutes",
+        "aggregation": "avg",
+        "debounceMinutes": 15
+      }
+    },
+    {
+      "id": "marketing-budget-exceeded",
+      "modelName": "marketing",
+      "metricName": "daily_spend",
+      "threshold": 1000,
+      "comparison": "gt",
+      "severity": "critical",
+      "message": "Budget quotidien dépassé",
+      "metadata": {
+        "timeWindow": "24 hours",
+        "aggregation": "sum",
+        "debounceMinutes": 120
+      }
+    },
+    {
+      "id": "onboarding-activation-low",
+      "modelName": "onboarding",
+      "metricName": "activation_rate",
+      "threshold": 20,
+      "comparison": "lt",
+      "severity": "warning",
+      "message": "Taux d'activation faible (<20%)",
+      "metadata": {
+        "timeWindow": "2 hours",
+        "aggregation": "avg",
+        "debounceMinutes": 90
+      }
+    },
+    {
+      "id": "onboarding-drop-off-high",
+      "modelName": "onboarding",
+      "metricName": "drop_off_rate",
+      "threshold": 50,
+      "comparison": "gt",
+      "severity": "critical",
+      "message": "Taux d'abandon élevé (>50%)",
+      "metadata": {
+        "timeWindow": "1 hour",
+        "aggregation": "avg",
+        "debounceMinutes": 60
+      }
+    },
+    {
+      "id": "payment-revenue-drop",
+      "modelName": "payment",
+      "metricName": "hourly_revenue",
+      "threshold": 100,
+      "comparison": "lt",
+      "severity": "critical",
+      "message": "Chute du revenu horaire (<100€)",
+      "metadata": {
+        "timeWindow": "1 hour",
+        "aggregation": "sum",
+        "debounceMinutes": 30
+      }
+    },
+    {
+      "id": "payment-churn-spike",
+      "modelName": "payment",
+      "metricName": "churn_rate",
+      "threshold": 5,
+      "comparison": "gt",
+      "severity": "warning",
+      "message": "Augmentation du taux de churn (>5%)",
+      "metadata": {
+        "timeWindow": "24 hours",
+        "aggregation": "avg",
+        "debounceMinutes": 180
+      }
+    },
+    {
+      "id": "payment-failed-transactions",
+      "modelName": "payment",
+      "metricName": "failed_transaction_rate",
+      "threshold": 10,
+      "comparison": "gt",
+      "severity": "critical",
+      "message": "Taux élevé de transactions échouées (>10%)",
+      "metadata": {
+        "timeWindow": "30 minutes",
+        "aggregation": "avg",
+        "debounceMinutes": 30
+      }
+    },
+    {
+      "id": "system-error-rate",
+      "modelName": "all",
+      "metricName": "error_rate",
+      "threshold": 5,
+      "comparison": "gt",
+      "severity": "critical",
+      "message": "Taux d'erreur système élevé (>5%)",
+      "metadata": {
+        "timeWindow": "5 minutes",
+        "aggregation": "avg",
+        "debounceMinutes": 10
+      }
+    }
+  ],
+  "channels": [
+    {
+      "name": "email-primary",
+      "type": "email",
+      "enabled": true,
+      "config": {
+        "recipients": ["admin@ofm-social.com", "ops@ofm-social.com"],
+        "severityFilter": ["warning", "critical"]
+      }
+    },
+    {
+      "name": "slack-alerts",
+      "type": "slack",
+      "enabled": true,
+      "config": {
+        "channel": "#kpi-alerts",
+        "severityFilter": ["critical"],
+        "webhookUrl": "${SLACK_WEBHOOK_URL}"
+      }
+    },
+    {
+      "name": "webhook-external",
+      "type": "webhook",
+      "enabled": false,
+      "config": {
+        "url": "https://api.example.com/alerts",
+        "headers": {
+          "Authorization": "Bearer ${WEBHOOK_TOKEN}"
+        },
+        "severityFilter": ["critical"]
+      }
+    }
+  ],
+  "schedules": {
+    "default": "*/15 * * * *",
+    "critical": "*/5 * * * *",
+    "daily_report": "0 9 * * *"
+  },
+  "globalSettings": {
+    "enabled": true,
+    "testMode": false,
+    "defaultDebounceMinutes": 60,
+    "maxAlertsPerHour": 50
+  }
+}
