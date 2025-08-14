@@ -32,7 +32,10 @@
     "natural:add-warm": "node src/cli-dm-natural.mjs add-warm",
     "natural:campaign": "node src/cli-dm-natural.mjs campaign",
     "natural:status": "node src/cli-dm-natural.mjs status",
-    "natural:test": "node src/cli-dm-natural.mjs test"
+    "natural:test": "node src/cli-dm-natural.mjs test",
+    "fast:blast": "node src/cli-fast-tempo.mjs blast",
+    "fast:handoff": "node src/cli-fast-tempo.mjs handoff",
+    "fast:stats": "node src/cli-fast-tempo.mjs stats"
   },
   "dependencies": {
     "apify": "^3.4.4",
