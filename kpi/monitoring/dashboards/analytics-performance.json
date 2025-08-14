@@ -1,0 +1,378 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Analytics Performance Dashboard",
+    "description": "Performance détaillée des composants ETL et AnalyticsEngine",
+    "tags": ["kpi", "analytics", "etl", "performance"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-4h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "ETL Processing Pipeline",
+        "type": "graph",
+        "gridPos": {"h": 10, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(kpi_etl_records_processed_total{status=\"valid\"}[5m])",
+            "legendFormat": "Valid - {{model_name}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(kpi_etl_records_processed_total{status=\"invalid\"}[5m])",
+            "legendFormat": "Invalid - {{model_name}}",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(kpi_etl_records_processed_total{status=\"duplicate\"}[5m])",
+            "legendFormat": "Duplicates - {{model_name}}",
+            "refId": "C"
+          },
+          {
+            "expr": "rate(kpi_etl_records_processed_total{status=\"outlier\"}[5m])",
+            "legendFormat": "Outliers - {{model_name}}",
+            "refId": "D"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Records/sec",
+            "min": 0
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true,
+          "avg": true
+        },
+        "tooltip": {
+          "shared": true,
+          "sort": 2
+        }
+      },
+      {
+        "id": 2,
+        "title": "ETL Processing Duration by Stage",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 10},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(kpi_etl_processing_duration_seconds_bucket{stage=\"validation\"}[5m]))",
+            "legendFormat": "Validation (p95)",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(kpi_etl_processing_duration_seconds_bucket{stage=\"transformation\"}[5m]))",
+            "legendFormat": "Transformation (p95)",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(kpi_etl_processing_duration_seconds_bucket{stage=\"storage\"}[5m]))",
+            "legendFormat": "Storage (p95)",
+            "refId": "C"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (seconds)",
+            "min": 0
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true
+        }
+      },
+      {
+        "id": 3,
+        "title": "Batch Size Distribution",
+        "type": "histogram",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 10},
+        "targets": [
+          {
+            "expr": "increase(kpi_etl_batch_size_bucket[1h])",
+            "legendFormat": "{{le}} records",
+            "refId": "A"
+          }
+        ],
+        "xAxis": {
+          "show": true,
+          "mode": "histogram"
+        },
+        "yAxis": {
+          "show": true
+        }
+      },
+      {
+        "id": 4,
+        "title": "Data Quality Metrics",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 18},
+        "targets": [
+          {
+            "expr": "kpi_etl_quality_score",
+            "legendFormat": "Quality Score - {{model_name}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Score (0-100)",
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "thresholds": [
+          {
+            "value": 70,
+            "colorMode": "critical",
+            "op": "lt",
+            "fill": true,
+            "line": true
+          },
+          {
+            "value": 90,
+            "colorMode": "warning",
+            "op": "lt",
+            "fill": false,
+            "line": true
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Validation Error Types",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 18},
+        "targets": [
+          {
+            "expr": "increase(kpi_etl_validation_errors_total[1h])",
+            "legendFormat": "{{error_type}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "pieType": "donut",
+          "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "values": ["value", "percent"]
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "ETL Success Rate",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 18},
+        "targets": [
+          {
+            "expr": "rate(kpi_etl_batches_processed_total{result=\"success\"}[5m]) / rate(kpi_etl_batches_processed_total[5m]) * 100",
+            "legendFormat": "Success Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 95},
+                {"color": "green", "value": 99}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Analytics Algorithm Performance",
+        "type": "graph",
+        "gridPos": {"h": 10, "w": 12, "x": 0, "y": 26},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(kpi_analytics_algorithm_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{algorithm_name}} (p95)",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(kpi_analytics_algorithm_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{algorithm_name}} (p50)",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (seconds)",
+            "min": 0
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true,
+          "avg": true
+        }
+      },
+      {
+        "id": 8,
+        "title": "Anomaly Detection Results",
+        "type": "graph",
+        "gridPos": {"h": 10, "w": 12, "x": 12, "y": 26},
+        "targets": [
+          {
+            "expr": "rate(kpi_analytics_anomalies_detected_total{severity=\"high\"}[5m])",
+            "legendFormat": "High Severity - {{method}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(kpi_analytics_anomalies_detected_total{severity=\"medium\"}[5m])",
+            "legendFormat": "Medium Severity - {{method}}",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(kpi_analytics_anomalies_detected_total{severity=\"low\"}[5m])",
+            "legendFormat": "Low Severity - {{method}}",
+            "refId": "C"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Anomalies/sec",
+            "min": 0
+          }
+        ],
+        "seriesOverrides": [
+          {
+            "alias": "/High Severity.*/",
+            "color": "red"
+          },
+          {
+            "alias": "/Medium Severity.*/",
+            "color": "orange"
+          },
+          {
+            "alias": "/Low Severity.*/",
+            "color": "yellow"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "LLM API Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 36},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(kpi_analytics_llm_latency_seconds_bucket[5m]))",
+            "legendFormat": "{{provider}} - {{model}} (p95)",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(kpi_analytics_llm_calls_total{status=\"success\"}[5m])",
+            "legendFormat": "Success Rate - {{provider}}",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Latency (seconds)",
+            "min": 0
+          },
+          {
+            "label": "Calls/sec",
+            "min": 0
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true
+        }
+      },
+      {
+        "id": 10,
+        "title": "Cross-Model Analysis Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 36},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(kpi_benchmark_calculation_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{metric_name}} (p95)",
+            "refId": "A"
+          },
+          {
+            "expr": "kpi_benchmark_models_compared",
+            "legendFormat": "Models Compared - {{metric_name}}",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (seconds)",
+            "min": 0
+          },
+          {
+            "label": "Model Count",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Data Points Analyzed Over Time",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 44},
+        "targets": [
+          {
+            "expr": "kpi_analytics_data_points_analyzed",
+            "legendFormat": "Data Points - {{model_name}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Data Points",
+            "min": 0
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true,
+          "avg": true,
+          "max": true
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "model",
+          "type": "query",
+          "query": "label_values(kpi_etl_records_processed_total, model_name)",
+          "refresh": 1,
+          "includeAll": true,
+          "allValue": ".*"
+        },
+        {
+          "name": "algorithm",
+          "type": "query",
+          "query": "label_values(kpi_analytics_algorithm_duration_seconds, algorithm_name)",
+          "refresh": 1,
+          "includeAll": true,
+          "allValue": ".*"
+        }
+      ]
+    }
+  }
+}

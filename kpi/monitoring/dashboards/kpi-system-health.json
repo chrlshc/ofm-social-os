@@ -1,0 +1,338 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "KPI System Health Overview",
+    "description": "Vue d'ensemble de la santé du système KPI - ETL, Analytics, WebSocket et Sécurité",
+    "tags": ["kpi", "overview", "health"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Overview",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "up{app=\"ofm-kpi-system\"}",
+            "legendFormat": "System Up",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(kpi_security_requests_total[5m])",
+            "legendFormat": "Requests/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "kpi_websocket_active_connections",
+            "legendFormat": "Active WS Connections",
+            "refId": "C"
+          },
+          {
+            "expr": "kpi_etl_active_processors",
+            "legendFormat": "Active ETL Processors",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "min": 0,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 0.5},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          },
+          "orientation": "horizontal",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 2,
+        "title": "ETL Processing Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(kpi_etl_records_processed_total{status=\"valid\"}[5m])",
+            "legendFormat": "Valid Records/sec - {{model_name}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(kpi_etl_records_processed_total{status=\"invalid\"}[5m])",
+            "legendFormat": "Invalid Records/sec - {{model_name}}",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Records/sec",
+            "min": 0
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true
+        },
+        "tooltip": {
+          "shared": true
+        }
+      },
+      {
+        "id": 3,
+        "title": "Data Quality Score",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "kpi_etl_quality_score",
+            "legendFormat": "{{model_name}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 70},
+                {"color": "green", "value": 90}
+              ]
+            }
+          }
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Analytics Insights Generated",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(kpi_analytics_insights_generated_total[5m])",
+            "legendFormat": "{{severity}} - {{model_name}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Insights/sec",
+            "min": 0
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true
+        }
+      },
+      {
+        "id": 5,
+        "title": "WebSocket Event Distribution",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "increase(kpi_websocket_events_published_total[1h])",
+            "legendFormat": "{{event_type}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          },
+          "pieType": "donut"
+        }
+      },
+      {
+        "id": 6,
+        "title": "Security Metrics",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "rate(kpi_security_rate_limit_hits_total[5m])",
+            "legendFormat": "Rate Limit Hits/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(kpi_security_intrusion_attempts_total[5m])",
+            "legendFormat": "Intrusion Attempts/sec - {{attack_type}}",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Events/sec",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Response Time Distribution",
+        "type": "heatmap",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 24},
+        "targets": [
+          {
+            "expr": "rate(kpi_security_request_duration_seconds_bucket[5m])",
+            "legendFormat": "{{le}}",
+            "refId": "A"
+          }
+        ],
+        "heatmap": {
+          "xAxis": {
+            "show": true
+          },
+          "yAxis": {
+            "show": true,
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Active Analysis & Processing",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 24},
+        "targets": [
+          {
+            "expr": "kpi_analytics_active_analysis",
+            "legendFormat": "Active Analysis",
+            "refId": "A"
+          },
+          {
+            "expr": "kpi_etl_active_processors",
+            "legendFormat": "Active ETL",
+            "refId": "B"
+          },
+          {
+            "expr": "kpi_websocket_active_connections",
+            "legendFormat": "WS Connections",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "min": 0,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 5},
+                {"color": "red", "value": 10}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Cross-Model Learning Opportunities",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "rate(kpi_benchmark_learning_opportunities_total[10m])",
+            "legendFormat": "{{source_model}} → {{target_model}} ({{metric_name}})",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Opportunities/10min",
+            "min": 0
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true
+        }
+      },
+      {
+        "id": 10,
+        "title": "Average Confidence Score",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "targets": [
+          {
+            "expr": "kpi_benchmark_average_confidence",
+            "legendFormat": "{{metric_name}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 0.6},
+                {"color": "green", "value": 0.8}
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "prometheus",
+          "enable": true,
+          "expr": "changes(process_start_time_seconds{app=\"ofm-kpi-system\"}[1h])",
+          "iconColor": "blue",
+          "textFormat": "Deployment"
+        }
+      ]
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "model",
+          "type": "query",
+          "query": "label_values(kpi_etl_records_processed_total, model_name)",
+          "refresh": 1,
+          "includeAll": true,
+          "allValue": ".*"
+        },
+        {
+          "name": "environment",
+          "type": "query",
+          "query": "label_values(kpi_etl_records_processed_total, environment)",
+          "refresh": 1,
+          "includeAll": false
+        }
+      ]
+    }
+  }
+}
