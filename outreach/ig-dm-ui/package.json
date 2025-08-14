@@ -27,7 +27,12 @@
     "beta:setup": "node src/cli-dm-beta.mjs setup",
     "beta:campaign": "node src/cli-dm-beta.mjs campaign",
     "beta:status": "node src/cli-dm-beta.mjs status",
-    "beta:test": "node src/cli-dm-beta.mjs test"
+    "beta:test": "node src/cli-dm-beta.mjs test",
+    "natural:setup": "node src/cli-dm-natural.mjs setup",
+    "natural:add-warm": "node src/cli-dm-natural.mjs add-warm",
+    "natural:campaign": "node src/cli-dm-natural.mjs campaign",
+    "natural:status": "node src/cli-dm-natural.mjs status",
+    "natural:test": "node src/cli-dm-natural.mjs test"
   },
   "dependencies": {
     "apify": "^3.4.4",

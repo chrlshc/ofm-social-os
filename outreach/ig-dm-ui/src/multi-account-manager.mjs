@@ -51,8 +51,13 @@ export class MultiAccountManager {
 
   addAccount(account) {
     // Validate account structure
-    if (!account.username || !account.password) {
-      throw new Error('Account must have username and password');
+    if (!account.username) {
+      throw new Error('Account must have username');
+    }
+
+    // Support for existing accounts with cookies
+    if (!account.password && !account.cookies) {
+      throw new Error('Account must have either password or cookies for authentication');
     }
 
     // Add unique ID if not present
@@ -65,11 +70,14 @@ export class MultiAccountManager {
     account.status = account.status || 'active';
     account.proxy = account.proxy || null;
     account.cookies = account.cookies || null;
+    account.sessionData = account.sessionData || null;
     account.created = account.created || new Date().toISOString();
+    account.isWarmAccount = !!account.cookies; // Mark as warm if has cookies
     account.metadata = account.metadata || {
       teamMember: account.teamMember || 'unassigned',
       modelName: account.modelName || account.username,
-      niche: account.niche || 'general'
+      niche: account.niche || 'general',
+      accountAge: account.accountAge || 'new'
     };
 
     this.accounts.push(account);
@@ -132,6 +140,15 @@ export class MultiAccountManager {
 
   getDailyLimit(account) {
     // Conservative limits based on account age and type
+    
+    // For warm accounts with existing cookies/session
+    if (account.isWarmAccount) {
+      if (account.metadata?.accountAge === 'mature') return 80; // Mature warm accounts
+      if (account.metadata?.accountAge === 'established') return 60; // Established warm accounts
+      return 50; // Default for warm accounts
+    }
+    
+    // For new accounts
     const accountAge = Math.floor(
       (Date.now() - new Date(account.created).getTime()) / (1000 * 60 * 60 * 24)
     );
