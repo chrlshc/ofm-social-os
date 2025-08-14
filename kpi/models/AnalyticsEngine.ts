@@ -1,6 +1,16 @@
 import { KpiRecord, Insight, Recommendation } from './BaseModel';
 import { ETLProcessor, ProcessedData } from './ETLProcessor';
 import { callLLM } from '../utils/llm';
+import { 
+  detectAnomalies, 
+  analyzeTrends, 
+  computeCorrelations, 
+  calculateBasicStats,
+  StatsSummary,
+  AnomalyResult,
+  TrendResult,
+  CorrelationResult
+} from '../analytics/StatsUtils';
 
 export interface AnalyticsConfig {
   modelName: string;
@@ -146,7 +156,7 @@ export class AnalyticsEngine {
     };
   }
   
-  // Analyse des tendances
+  // Analyse des tendances utilisant StatsUtils
   private async analyzeTrends(records: KpiRecord[]): Promise<TrendData[]> {
     const trends: TrendData[] = [];
     const metricsToAnalyze = [...new Set(records.map(r => r.metricName))];
@@ -158,100 +168,32 @@ export class AnalyticsEngine {
       
       if (metricRecords.length < 5) continue; // Pas assez de données
       
-      const trend = this.calculateTrend(metricRecords);
-      const seasonality = this.config.features.seasonalityDetection
-        ? this.detectSeasonality(metricRecords)
-        : undefined;
+      const values = metricRecords.map(r => r.value);
+      const trendResult = analyzeTrends(values, {
+        detectSeasonality: this.config.features.seasonalityDetection,
+        seasonalityPeriods: [7, 24, 30] // journalier, horaire, mensuel
+      });
       
       trends.push({
         metric,
-        direction: trend.direction,
-        strength: trend.strength,
-        confidence: trend.confidence,
+        direction: trendResult.direction,
+        strength: trendResult.strength,
+        confidence: trendResult.rSquared, // Utiliser R² comme mesure de confiance
         timeframe: `${metricRecords.length} points over ${this.getTimespan(metricRecords)}`,
-        seasonality
+        seasonality: trendResult.seasonality ? {
+          detected: trendResult.seasonality.detected,
+          period: trendResult.seasonality.period ? `${trendResult.seasonality.period} units` : 'unknown',
+          amplitude: trendResult.seasonality.amplitude || 0
+        } : undefined
       });
     }
     
     return trends;
   }
   
-  private calculateTrend(records: KpiRecord[]): {
-    direction: 'up' | 'down' | 'stable';
-    strength: number;
-    confidence: number;
-  } {
-    const values = records.map(r => r.value);
-    const n = values.length;
-    
-    // Régression linéaire simple
-    const x = Array.from({ length: n }, (_, i) => i);
-    const sumX = x.reduce((a, b) => a + b, 0);
-    const sumY = values.reduce((a, b) => a + b, 0);
-    const sumXY = x.reduce((sum, xi, i) => sum + xi * values[i], 0);
-    const sumXX = x.reduce((sum, xi) => sum + xi * xi, 0);
-    
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-    const intercept = (sumY - slope * sumX) / n;
-    
-    // Calculer R²
-    const meanY = sumY / n;
-    const totalSumSquares = values.reduce((sum, yi) => sum + Math.pow(yi - meanY, 2), 0);
-    const residualSumSquares = values.reduce((sum, yi, i) => {
-      const predicted = slope * i + intercept;
-      return sum + Math.pow(yi - predicted, 2);
-    }, 0);
-    
-    const rSquared = 1 - (residualSumSquares / totalSumSquares);
-    
-    return {
-      direction: slope > 0.01 ? 'up' : slope < -0.01 ? 'down' : 'stable',
-      strength: Math.abs(slope),
-      confidence: Math.max(0, rSquared)
-    };
-  }
   
-  private detectSeasonality(records: KpiRecord[]): {
-    detected: boolean;
-    period: string;
-    amplitude: number;
-  } | undefined {
-    // Implémentation simplifiée de détection de saisonnalité
-    // En production, utiliser une FFT ou des méthodes plus sophistiquées
-    
-    if (records.length < 14) return undefined; // Pas assez de données
-    
-    const values = records.map(r => r.value);
-    const hours = records.map(r => r.createdAt!.getHours());
-    
-    // Analyser les patterns horaires
-    const hourlyAverages = new Array(24).fill(0);
-    const hourlyCounts = new Array(24).fill(0);
-    
-    values.forEach((value, i) => {
-      const hour = hours[i];
-      hourlyAverages[hour] += value;
-      hourlyCounts[hour]++;
-    });
-    
-    for (let i = 0; i < 24; i++) {
-      if (hourlyCounts[i] > 0) {
-        hourlyAverages[i] /= hourlyCounts[i];
-      }
-    }
-    
-    const mean = hourlyAverages.reduce((a, b) => a + b, 0) / 24;
-    const variance = hourlyAverages.reduce((sum, avg) => sum + Math.pow(avg - mean, 2), 0) / 24;
-    const amplitude = Math.sqrt(variance);
-    
-    return {
-      detected: amplitude > mean * 0.1, // 10% de variation
-      period: 'daily',
-      amplitude
-    };
-  }
   
-  // Détection d'anomalies
+  // Détection d'anomalies utilisant StatsUtils
   private async detectAnomalies(records: KpiRecord[]): Promise<AnomalyData[]> {
     const anomalies: AnomalyData[] = [];
     const metricsToAnalyze = [...new Set(records.map(r => r.metricName))];
@@ -261,37 +203,42 @@ export class AnalyticsEngine {
       if (metricRecords.length < 10) continue;
       
       const values = metricRecords.map(r => r.value);
-      const stats = this.calculateStatistics(values);
+      const stats = calculateBasicStats(values);
       
-      // Utiliser IQR pour détecter les outliers
-      const q1 = this.percentile(values, 0.25);
-      const q3 = this.percentile(values, 0.75);
-      const iqr = q3 - q1;
-      const lowerBound = q1 - 1.5 * iqr;
-      const upperBound = q3 + 1.5 * iqr;
+      // Utiliser les 3 méthodes de détection d'anomalies
+      const methods: Array<'zscore' | 'iqr' | 'modified_zscore'> = ['zscore', 'iqr', 'modified_zscore'];
+      const detectedAnomalies = new Set<number>();
       
-      metricRecords.forEach(record => {
-        if (record.value < lowerBound || record.value > upperBound) {
-          const distanceFromNormal = Math.min(
-            Math.abs(record.value - lowerBound),
-            Math.abs(record.value - upperBound)
-          );
-          
-          const severity = distanceFromNormal > iqr * 2 ? 'high' :
-                          distanceFromNormal > iqr ? 'medium' : 'low';
-          
+      for (const method of methods) {
+        const methodAnomalies = detectAnomalies(values, method);
+        methodAnomalies
+          .filter(a => a.isAnomaly)
+          .forEach(a => detectedAnomalies.add(a.index));
+      }
+      
+      // Convertir les indices d'anomalies en AnomalyData
+      Array.from(detectedAnomalies).forEach(index => {
+        const record = metricRecords[index];
+        const anomalyResult = detectAnomalies(values, 'iqr')[index];
+        
+        if (anomalyResult && record) {
           anomalies.push({
             metric,
             value: record.value,
-            expectedRange: { min: lowerBound, max: upperBound },
-            severity,
-            probability: Math.min(distanceFromNormal / (iqr * 3), 1),
+            expectedRange: { 
+              min: stats.quartiles.q1 - 1.5 * stats.quartiles.iqr, 
+              max: stats.quartiles.q3 + 1.5 * stats.quartiles.iqr 
+            },
+            severity: anomalyResult.severity,
+            probability: Math.abs(anomalyResult.zScore) / 3, // Normaliser le z-score
             context: {
               platform: record.platform,
               campaignId: record.campaignId,
               createdAt: record.createdAt,
               meanValue: stats.mean,
-              stdDev: stats.stdDev
+              stdDev: stats.standardDeviation,
+              detectionMethod: 'multi-method',
+              zScore: anomalyResult.zScore
             }
           });
         }
@@ -339,41 +286,33 @@ export class AnalyticsEngine {
     });
     
     // Extraire les paires de valeurs
-    const pairs: Array<{ x: number; y: number }> = [];
+    const seriesA: number[] = [];
+    const seriesB: number[] = [];
+    
     timeGroups.forEach(group => {
       if (group[metric1] !== undefined && group[metric2] !== undefined) {
-        pairs.push({ x: group[metric1], y: group[metric2] });
+        seriesA.push(group[metric1]);
+        seriesB.push(group[metric2]);
       }
     });
     
-    if (pairs.length < 5) return null;
+    if (seriesA.length < 5) return null;
     
-    // Calculer la corrélation de Pearson
-    const n = pairs.length;
-    const sumX = pairs.reduce((sum, p) => sum + p.x, 0);
-    const sumY = pairs.reduce((sum, p) => sum + p.y, 0);
-    const sumXY = pairs.reduce((sum, p) => sum + p.x * p.y, 0);
-    const sumXX = pairs.reduce((sum, p) => sum + p.x * p.x, 0);
-    const sumYY = pairs.reduce((sum, p) => sum + p.y * p.y, 0);
+    // Utiliser la fonction de corrélation de StatsUtils
+    const correlationResult = computeCorrelations(seriesA, seriesB);
     
-    const numerator = n * sumXY - sumX * sumY;
-    const denominator = Math.sqrt((n * sumXX - sumX * sumX) * (n * sumYY - sumY * sumY));
-    
-    if (denominator === 0) return null;
-    
-    const correlation = numerator / denominator;
-    
-    // Calculer une approximation du p-value (test t)
-    const tStat = correlation * Math.sqrt((n - 2) / (1 - correlation * correlation));
-    const pValue = this.approximatePValue(Math.abs(tStat), n - 2);
+    // Mapper la significance de StatsUtils vers notre format
+    const significance = correlationResult.significance === 'strong' ? 'high' :
+                        correlationResult.significance === 'moderate' ? 'medium' :
+                        correlationResult.significance === 'weak' ? 'medium' : 'low';
     
     return {
       metric1,
       metric2,
-      correlation,
-      pValue,
-      significance: pValue < 0.01 ? 'high' : pValue < 0.05 ? 'medium' : 'low',
-      interpretation: this.interpretCorrelation(correlation, metric1, metric2)
+      correlation: correlationResult.correlation,
+      pValue: correlationResult.pValue,
+      significance,
+      interpretation: this.interpretCorrelation(correlationResult.correlation, metric1, metric2)
     };
   }
   
@@ -455,24 +394,9 @@ Génère 2-3 recommandations concrètes en format JSON:
     }));
   }
   
-  // Méthodes utilitaires
-  private calculateStatistics(values: number[]) {
-    const n = values.length;
-    const mean = values.reduce((a, b) => a + b, 0) / n;
-    const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / n;
-    const stdDev = Math.sqrt(variance);
-    
-    return { mean, variance, stdDev, count: n };
-  }
-  
-  private percentile(values: number[], p: number): number {
-    const sorted = [...values].sort((a, b) => a - b);
-    const index = (sorted.length - 1) * p;
-    const lower = Math.floor(index);
-    const upper = Math.ceil(index);
-    const weight = index % 1;
-    
-    return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+  // Méthodes utilitaires enrichies avec StatsUtils
+  private calculateStatistics(values: number[]): StatsSummary {
+    return calculateBasicStats(values);
   }
   
   private getTimespan(records: KpiRecord[]): string {
@@ -488,14 +412,6 @@ Génère 2-3 recommandations concrètes en format JSON:
     return `${diffDays.toFixed(1)} days`;
   }
   
-  private approximatePValue(tStat: number, df: number): number {
-    // Approximation très simplifiée du p-value
-    // En production, utiliser une vraie distribution t de Student
-    if (tStat > 3) return 0.001;
-    if (tStat > 2.5) return 0.01;
-    if (tStat > 2) return 0.05;
-    return 0.1;
-  }
   
   private interpretCorrelation(correlation: number, metric1: string, metric2: string): string {
     const strength = Math.abs(correlation);
