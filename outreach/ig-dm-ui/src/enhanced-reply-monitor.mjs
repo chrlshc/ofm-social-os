@@ -513,6 +513,26 @@ export class EnhancedReplyMonitor {
     return hints[intent] || hints[sentiment] || hints.neutral;
   }
 
+  /**
+   * Get AI-generated playbook for closers
+   */
+  async getAIPlaybook(conv, tz, latency) {
+    try {
+      const { closerPlan } = await import('./closer-playbook.mjs');
+      const plan = await closerPlan({
+        username: conv.target,
+        intent: conv.intent,
+        sentiment: conv.sentiment,
+        tz: tz,
+        latencySec: latency,
+        lastMsg: conv.replyText || conv.message
+      });
+      return plan?.steps?.join(' → ') || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   getStatistics() {
     const stats = {
       total: this.conversations.size,

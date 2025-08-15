@@ -190,8 +190,9 @@ export class EnhancedDMOrchestrator {
           // Update account metrics
           this.accountManager.updateAccountMetrics(accountId, result);
           
-          // Natural pause
-          const pauseTime = this.getRandomPause(this.config.pauseBetweenDMs);
+          // Natural pause (per-account tempo)
+          const accountTempo = this.accountManager.tempoFor(account);
+          const pauseTime = this.getRandomPause(accountTempo);
           console.log(`   ⏸️ Pausing ${Math.round(pauseTime / 1000)}s before next DM...`);
           await this.sleep(pauseTime);
           
@@ -408,6 +409,11 @@ export class EnhancedDMOrchestrator {
     // Reset hourly limits at the top of each hour
     const now = new Date();
     const msUntilNextHour = (60 - now.getMinutes()) * 60 * 1000 - now.getSeconds() * 1000;
+    
+    // Also check backpressure every 5 minutes
+    setInterval(() => {
+      this.accountManager.applyBackpressure();
+    }, 5 * 60 * 1000);
     
     setTimeout(() => {
       this.accountManager.resetHourlyLimits();

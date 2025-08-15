@@ -135,7 +135,17 @@ export class DMTrackingDatabase {
         error_message TEXT,
         error_details JSONB,
         occurred_at TIMESTAMP DEFAULT NOW()
-      )`
+      )`,
+      
+      // Account reply stats for per-account backpressure
+      `CREATE TABLE IF NOT EXISTS account_reply_stats (
+        account TEXT PRIMARY KEY,
+        reply_rate_30m DOUBLE PRECISION NOT NULL DEFAULT 0,
+        sent_30m INT NOT NULL DEFAULT 0,
+        replied_30m INT NOT NULL DEFAULT 0,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_account_reply_stats_updated ON account_reply_stats(updated_at)`
     ];
     
     for (const query of queries) {
@@ -597,6 +607,57 @@ export class DMTrackingDatabase {
     
     const result = await this.client.query(query);
     return result.rows[0]?.reply_rate || 0;
+  }
+
+  async recentReplyRateByAccount(minutes = 30) {
+    const { rows } = await this.client.query(`
+      WITH sent AS (
+        SELECT id, account FROM dm_outreach_logs
+        WHERE sent_at > NOW() - INTERVAL '${minutes} minutes'
+      ),
+      replied AS (
+        SELECT r.outreach_log_id, s.account
+        FROM dm_replies r
+        JOIN sent s ON s.id = r.outreach_log_id
+      )
+      SELECT
+        s.account,
+        COUNT(s.id) AS sent_30m,
+        COUNT(r.outreach_log_id) AS replied_30m,
+        CASE WHEN COUNT(s.id)=0 THEN 0.0
+             ELSE COUNT(r.outreach_log_id)::float / COUNT(s.id)::float
+        END AS reply_rate_30m
+      FROM sent s
+      LEFT JOIN replied r ON r.outreach_log_id = s.id
+      GROUP BY s.account
+    `);
+    return rows.map(r => ({
+      account: r.account,
+      sent_30m: Number(r.sent_30m),
+      replied_30m: Number(r.replied_30m),
+      reply_rate_30m: Number(r.reply_rate_30m)
+    }));
+  }
+  
+  async refreshAccountReplyStats(minutes = 30) {
+    const stats = await this.recentReplyRateByAccount(minutes);
+    for (const s of stats) {
+      await this.client.query(`
+        INSERT INTO account_reply_stats (account, reply_rate_30m, sent_30m, replied_30m, updated_at)
+        VALUES ($1,$2,$3,$4, NOW())
+        ON CONFLICT (account)
+        DO UPDATE SET reply_rate_30m=EXCLUDED.reply_rate_30m, sent_30m=EXCLUDED.sent_30m,
+                      replied_30m=EXCLUDED.replied_30m, updated_at=NOW()
+      `, [s.account, s.reply_rate_30m, s.sent_30m, s.replied_30m]);
+    }
+    return stats;
+  }
+  
+  async getAccountReplyStats() {
+    const { rows } = await this.client.query(`SELECT * FROM account_reply_stats`);
+    const byAcc = new Map();
+    for (const r of rows) byAcc.set(r.account, r);
+    return byAcc;
   }
 
   async close() {

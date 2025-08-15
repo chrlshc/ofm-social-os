@@ -42,7 +42,9 @@
     "enhanced:accounts": "node src/cli-enhanced.mjs accounts",
     "enhanced:test": "node src/cli-enhanced.mjs test-message",
     "enhanced:db-init": "node src/cli-enhanced.mjs db-init",
-    "enhanced:db-stats": "node src/cli-enhanced.mjs db-stats"
+    "enhanced:db-stats": "node src/cli-enhanced.mjs db-stats",
+    "enhanced:live": "node src/api-live.mjs",
+    "enhanced:simulate": "node src/simulate-replies.mjs"
   },
   "dependencies": {
     "apify": "^3.4.4",

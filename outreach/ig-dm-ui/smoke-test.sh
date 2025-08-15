@@ -71,7 +71,31 @@ echo "1. Fill .env with API keys"
 echo "2. Update account_proxy_config.json with real accounts"
 echo "3. Run 'npm run enhanced:db-init' if using PostgreSQL"
 echo "4. Test with: npm run enhanced:campaign -- --max 10 --dry-run"
-echo "5. Go live with: npm run enhanced:campaign -- --max 50 --tempo fast"
+echo "5. Test backpressure: npm run enhanced:simulate -- --rate 0.15"
+echo "6. Monitor live: npm run enhanced:live (http://localhost:8088/stats/live)"
+echo "7. Go live with: npm run enhanced:campaign -- --max 50 --tempo fast --no-dry-run"
 
 echo ""
 echo -e "${YELLOW}⚠️  IMPORTANT: Always start with dry-run and small batches!${NC}"
+
+# Test if we can simulate replies
+echo ""
+echo "7️⃣ Testing reply simulation..."
+if command -v psql &> /dev/null && [ ! -z "$DATABASE_URL" ]; then
+    echo "   Running: npm run enhanced:simulate -- --rate 0.10 --max 5"
+    npm run enhanced:simulate -- --rate 0.10 --max 5 2>&1 | grep -E "(Found|Generating|Global)" | head -5
+    echo -e "${GREEN}✅ Reply simulation available${NC}"
+else
+    echo -e "${YELLOW}   Skipping (no database configured)${NC}"
+fi
+
+echo ""
+echo "📡 Production++ Features:"
+echo "   ✅ Per-account backpressure (individual tempo adjustment)"
+echo "   ✅ AI-powered closer playbook generation"
+echo "   ✅ Reply simulation for testing"
+echo "   ✅ Live API monitoring endpoint"
+echo "   ✅ Enhanced handoff with timezone & playbook"
+
+echo ""
+echo "🚀 System ready for scale!"

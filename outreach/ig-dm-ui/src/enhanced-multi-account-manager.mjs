@@ -19,7 +19,8 @@ export class EnhancedMultiAccountManager {
       highThreshold: 0.10, // 10% reply rate
       lowThreshold: 0.04,  // 4% reply rate
       slowTempo: { min: 120000, max: 240000 }, // 2-4 minutes
-      fastTempo: { min: 45000, max: 120000 }   // 45s-2 minutes
+      fastTempo: { min: 45000, max: 120000 },   // 45s-2 minutes
+      perAccountTempo: new Map() // account -> {min,max}
     };
     this.accountStatus = new Map();
     this.accountMetrics = new Map();
@@ -384,6 +385,14 @@ export class EnhancedMultiAccountManager {
   
   
   /**
+   * Get tempo for specific account
+   */
+  tempoFor(account) {
+    const accountId = this.getAccountId(account);
+    return this.backpressure.perAccountTempo.get(accountId) || this.currentTempo;
+  }
+
+  /**
    * Apply backpressure based on reply rate
    */
   async applyBackpressure() {
@@ -404,6 +413,31 @@ export class EnhancedMultiAccountManager {
       }
     } catch (error) {
       console.error('Backpressure check failed:', error);
+    }
+    
+    // Backpressure par compte
+    if (this.database) {
+      try {
+        await this.database.refreshAccountReplyStats(30);
+        const stats = await this.database.getAccountReplyStats();
+        
+        for (const account of this.accounts) {
+          const accountId = this.getAccountId(account);
+          const s = stats.get(accountId);
+          
+          if (s && s.reply_rate_30m > this.backpressure.highThreshold) {
+            this.backpressure.perAccountTempo.set(accountId, { 
+              min: this.backpressure.slowTempo.min, 
+              max: this.backpressure.slowTempo.max 
+            });
+            console.log(`🐌 Account ${accountId}: ${(s.reply_rate_30m*100).toFixed(1)}% reply rate → slow tempo`);
+          } else if (s && s.reply_rate_30m < this.backpressure.lowThreshold) {
+            this.backpressure.perAccountTempo.delete(accountId);
+          }
+        }
+      } catch (e) {
+        console.warn('Per-account backpressure failed:', e.message);
+      }
     }
   }
 
