@@ -44,7 +44,15 @@
     "enhanced:db-init": "node src/cli-enhanced.mjs db-init",
     "enhanced:db-stats": "node src/cli-enhanced.mjs db-stats",
     "enhanced:live": "node src/api-live.mjs",
-    "enhanced:simulate": "node src/simulate-replies.mjs"
+    "enhanced:simulate": "node src/simulate-replies.mjs",
+    "session:init": "node src/cli-session-manager.mjs init",
+    "session:status": "node src/cli-session-manager.mjs status",
+    "session:validate": "node src/cli-session-manager.mjs validate",
+    "session:refresh": "node src/cli-session-manager.mjs refresh",
+    "session:login": "node src/cli-session-manager.mjs login",
+    "session:health": "node src/cli-session-manager.mjs health",
+    "session:cleanup": "node src/cli-session-manager.mjs cleanup",
+    "session:2fa": "node src/cli-session-manager.mjs 2fa"
   },
   "dependencies": {
     "apify": "^3.4.4",

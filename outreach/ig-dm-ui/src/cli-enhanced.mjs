@@ -4,6 +4,7 @@ import { EnhancedDMOrchestrator } from './enhanced-dm-orchestrator.mjs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import fs from 'fs';
+import readline from 'readline';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,6 +54,7 @@ async function runCampaign() {
     useAI: !hasFlag('no-ai'),
     preEngagement: !hasFlag('no-likes'),
     useDatabase: !hasFlag('no-db'),
+    useSessionManager: !hasFlag('no-sessions'),
     accountConfigPath: arg('accounts', path.join(__dirname, '../config/account_proxy_config.json'))
   });
   
@@ -70,6 +72,7 @@ async function runCampaign() {
   console.log(`   AI Messages: ${!hasFlag('no-ai') ? 'Yes' : 'No'}`);
   console.log(`   Pre-engagement: ${!hasFlag('no-likes') ? 'Yes' : 'No'}`);
   console.log(`   Database: ${!hasFlag('no-db') ? 'Yes' : 'No'}`);
+  console.log(`   Session Manager: ${!hasFlag('no-sessions') ? 'Yes' : 'No'}`);
   
   // Default to dry-run unless explicitly disabled
   const isDryRun = !hasFlag('no-dry-run');
@@ -102,7 +105,6 @@ async function runCampaign() {
     console.log(`\n⚠️  WARNING: This will send REAL DMs to ${selectedTargets.length} accounts!\n`);
     console.log('Type YES to proceed or anything else to cancel:');
     
-    const readline = await import('readline');
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout
@@ -357,6 +359,7 @@ Campaign Options:
   --no-ai                 Disable AI message generation
   --no-likes              Skip pre-engagement (liking posts)
   --no-db                 Don't use database tracking
+  --no-sessions           Disable Instagram session manager
   --distribution <weighted|even>  Target distribution strategy
   --accounts <file>       Account config file
   --dry-run               Preview without sending
