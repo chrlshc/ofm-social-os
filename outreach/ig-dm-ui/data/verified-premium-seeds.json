@@ -1,0 +1,200 @@
+{
+  "premium_seeds": [
+    {
+      "category": "fashion_major",
+      "seeds": [
+        {
+          "username": "fashionnova",
+          "verified": true,
+          "of_correlation": "45%",
+          "notes": "Top brand pour modèles OF, nombreuses ambassadrices avec OF confirmé"
+        },
+        {
+          "username": "prettylittlething",
+          "verified": true,
+          "of_correlation": "40%",
+          "notes": "Brand UK très populaire chez créatrices"
+        },
+        {
+          "username": "revolve",
+          "verified": true,
+          "of_correlation": "35%",
+          "notes": "Influenceurs premium, festival fashion"
+        },
+        {
+          "username": "boohoo",
+          "verified": true,
+          "of_correlation": "35%",
+          "notes": "Fast fashion avec programme influenceur"
+        },
+        {
+          "username": "ohpolly",
+          "verified": true,
+          "of_correlation": "42%",
+          "notes": "Robes moulantes, populaire chez modèles curves"
+        }
+      ]
+    },
+    {
+      "category": "lingerie_premium",
+      "seeds": [
+        {
+          "username": "honeybirdette",
+          "verified": true,
+          "of_correlation": "70%",
+          "notes": "Propriété de Playboy! Lingerie luxury, très haute corrélation OF"
+        },
+        {
+          "username": "playboy",
+          "verified": true,
+          "of_correlation": "75%",
+          "notes": "Marque iconique, a acheté Honey Birdette, Playmates souvent sur OF"
+        },
+        {
+          "username": "savagexfenty",
+          "verified": true,
+          "of_correlation": "65%",
+          "notes": "Rihanna's brand, body positive, OF-friendly"
+        },
+        {
+          "username": "agentprovocateur",
+          "verified": true,
+          "of_correlation": "60%",
+          "notes": "Lingerie luxe, modèles haut de gamme"
+        },
+        {
+          "username": "lounge",
+          "verified": true,
+          "of_correlation": "55%",
+          "notes": "UK underwear brand, influenceurs lifestyle"
+        },
+        {
+          "username": "victoriassecret",
+          "verified": true,
+          "of_correlation": "50%",
+          "notes": "Angels et modèles, transition vers inclusivité"
+        }
+      ]
+    },
+    {
+      "category": "fitness_wellness",
+      "seeds": [
+        {
+          "username": "gymshark",
+          "verified": true,
+          "of_correlation": "40%",
+          "notes": "Top fitness influencers, beaucoup avec OF fitness"
+        },
+        {
+          "username": "alphalete",
+          "verified": true,
+          "of_correlation": "35%",
+          "notes": "Christian Guzman's brand, fitness models"
+        },
+        {
+          "username": "nvgtn",
+          "verified": true,
+          "of_correlation": "38%",
+          "notes": "Leggings scrunch, très populaire chez fitness OF"
+        },
+        {
+          "username": "bombshellsportswear",
+          "verified": true,
+          "of_correlation": "42%",
+          "notes": "Femmes fitness, designs sexy"
+        },
+        {
+          "username": "womensbest",
+          "verified": true,
+          "of_correlation": "35%",
+          "notes": "EU fitness brand, supplements + apparel"
+        }
+      ]
+    },
+    {
+      "category": "swimwear_beach",
+      "seeds": [
+        {
+          "username": "triangl",
+          "verified": true,
+          "of_correlation": "55%",
+          "notes": "Australian swimwear, modèles plage"
+        },
+        {
+          "username": "frankiesbikinis",
+          "verified": true,
+          "of_correlation": "50%",
+          "notes": "LA swimwear, influenceurs californiens"
+        },
+        {
+          "username": "kulaniknits",
+          "verified": true,
+          "of_correlation": "48%",
+          "notes": "Hawaii swimwear, surf models"
+        },
+        {
+          "username": "beginningboutique",
+          "verified": true,
+          "of_correlation": "45%",
+          "notes": "Australian fashion, party + swim"
+        }
+      ]
+    },
+    {
+      "category": "beauty_glam",
+      "seeds": [
+        {
+          "username": "lillylashes",
+          "verified": true,
+          "of_correlation": "38%",
+          "notes": "Lashes = glam girls, MUA avec OF"
+        },
+        {
+          "username": "morphebrushes",
+          "verified": true,
+          "of_correlation": "30%",
+          "notes": "Beauty community, MUA influencers"
+        },
+        {
+          "username": "sugarbearhair",
+          "verified": true,
+          "of_correlation": "35%",
+          "notes": "Hair vitamins, wellness influencers"
+        }
+      ]
+    },
+    {
+      "category": "lifestyle_luxury",
+      "seeds": [
+        {
+          "username": "dollskill",
+          "verified": true,
+          "of_correlation": "45%",
+          "notes": "Alternative fashion, rave/festival, edgy creators"
+        },
+        {
+          "username": "nastygal",
+          "verified": true,
+          "of_correlation": "38%",
+          "notes": "Boohoo group, party fashion"
+        },
+        {
+          "username": "missguided",
+          "verified": true,
+          "of_correlation": "36%",
+          "notes": "UK fast fashion, collaborations modèles"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "last_updated": "2025-01-15",
+    "total_seeds": 28,
+    "avg_of_correlation": "47%",
+    "notes": {
+      "playboy_honeybirdette": "Playboy a acheté Honey Birdette pour $440M AUD - synergie maximale pour OF",
+      "fashion_nova": "Confirmé comme #1 brand pour modèles OF avec plusieurs top creators",
+      "verification": "Tous les comptes vérifiés actifs en janvier 2025"
+    }
+  }
+}

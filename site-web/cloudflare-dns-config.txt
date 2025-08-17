@@ -1,0 +1,24 @@
+# Configuration DNS Cloudflare pour huntaze.com avec Netlify
+
+## Record 1 - Apex Domain
+Type: CNAME
+Name: @ (ou huntaze.com)
+Target: apex-loadbalancer.netlify.com
+Proxy: ON (orange)
+TTL: Auto
+
+## Record 2 - WWW Subdomain
+Type: CNAME
+Name: www
+Target: @
+Proxy: ON (orange)
+TTL: Auto
+
+## Configuration SSL/TLS dans Cloudflare
+1. Allez dans SSL/TLS → Overview
+2. Sélectionnez: Full (strict)
+
+## Après déploiement Netlify
+1. Dans Netlify → Domain settings
+2. Add custom domain → huntaze.com
+3. Netlify vérifiera automatiquement les DNS

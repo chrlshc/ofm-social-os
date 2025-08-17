@@ -1,0 +1,64 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'ofm-production'
+
+rule_files:
+  - "alerts/*.yml"
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node exporter for system metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # Frontend metrics
+  - job_name: 'frontend'
+    static_configs:
+      - targets: ['frontend:3000']
+    metrics_path: '/api/metrics'
+
+  # Marketing API metrics
+  - job_name: 'marketing-api'
+    static_configs:
+      - targets: ['marketing-api:3001']
+    metrics_path: '/metrics'
+
+  # Payment API metrics
+  - job_name: 'payment-api'
+    static_configs:
+      - targets: ['payment-api:5000']
+    metrics_path: '/metrics'
+
+  # Onboarding API metrics
+  - job_name: 'onboarding-api'
+    static_configs:
+      - targets: ['onboarding-api:5001']
+    metrics_path: '/metrics'
+
+  # KPI service metrics
+  - job_name: 'kpi-service'
+    static_configs:
+      - targets: ['kpi-service:3002']
+    metrics_path: '/metrics'
+
+  # PostgreSQL metrics
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  # Redis metrics
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # Nginx metrics
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']

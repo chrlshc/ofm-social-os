@@ -1,0 +1,124 @@
+{
+  "seeds": [
+    {
+      "username": "fashionnova",
+      "category": "fashion",
+      "quality_score": 10,
+      "metadata": {
+        "description": "Major fashion brand with high OF creator following"
+      }
+    },
+    {
+      "username": "prettylittlething",
+      "category": "fashion",
+      "quality_score": 10,
+      "metadata": {
+        "description": "UK fashion brand popular with models"
+      }
+    },
+    {
+      "username": "sheinofficial",
+      "category": "fashion",
+      "quality_score": 9,
+      "metadata": {
+        "description": "Fast fashion with influencer programs"
+      }
+    },
+    {
+      "username": "boohoo",
+      "category": "fashion",
+      "quality_score": 8,
+      "metadata": {
+        "description": "Fashion brand with model collaborations"
+      }
+    },
+    {
+      "username": "dollskill",
+      "category": "fashion",
+      "quality_score": 9,
+      "metadata": {
+        "description": "Alternative fashion, high creator overlap"
+      }
+    },
+    {
+      "username": "gymshark",
+      "category": "fitness",
+      "quality_score": 9,
+      "metadata": {
+        "description": "Fitness brand with influencer program"
+      }
+    },
+    {
+      "username": "alphalete",
+      "category": "fitness",
+      "quality_score": 8,
+      "metadata": {
+        "description": "Premium fitness apparel"
+      }
+    },
+    {
+      "username": "bombshellsportswear",
+      "category": "fitness",
+      "quality_score": 9,
+      "metadata": {
+        "description": "Women's fitness brand"
+      }
+    },
+    {
+      "username": "savagexfenty",
+      "category": "lingerie",
+      "quality_score": 10,
+      "metadata": {
+        "description": "Rihanna's lingerie brand, OF-friendly"
+      }
+    },
+    {
+      "username": "lounge",
+      "category": "lingerie",
+      "quality_score": 9,
+      "metadata": {
+        "description": "Underwear/loungewear brand"
+      }
+    },
+    {
+      "username": "revolve",
+      "category": "lifestyle",
+      "quality_score": 9,
+      "metadata": {
+        "description": "Influencer-focused fashion retailer"
+      }
+    },
+    {
+      "username": "ohpolly",
+      "category": "lifestyle",
+      "quality_score": 9,
+      "metadata": {
+        "description": "UK brand popular with content creators"
+      }
+    },
+    {
+      "username": "missguided",
+      "category": "fashion",
+      "quality_score": 8,
+      "metadata": {
+        "description": "Fashion brand with creator collaborations"
+      }
+    },
+    {
+      "username": "nvgtn",
+      "category": "fitness",
+      "quality_score": 8,
+      "metadata": {
+        "description": "Fitness apparel with influencer focus"
+      }
+    },
+    {
+      "username": "boutinela",
+      "category": "fashion",
+      "quality_score": 9,
+      "metadata": {
+        "description": "LA fashion boutique, model clientele"
+      }
+    }
+  ]
+}
