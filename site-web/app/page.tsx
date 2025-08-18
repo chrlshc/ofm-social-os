@@ -161,40 +161,40 @@ export default function HomePage() {
                 <h3 className="text-2xl md:text-3xl font-bold text-center mb-8">Our <span className="text-gradient">Unique Commission</span> System</h3>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {/* Free Tier */}
-                  <div className="relative bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-6 border-2 border-green-300 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                  <div className="relative bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 rounded-2xl p-6 border-2 border-green-300 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                     <div className="absolute -top-3 -right-3">
-                      <span className="bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">FREE</span>
+                      <span className="bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">FREE</span>
                     </div>
                     <div className="text-center">
                       <p className="text-gray-600 text-sm mb-2">Under</p>
-                      <p className="text-3xl font-bold text-gray-900 mb-2">€2,000/month</p>
+                      <p className="text-3xl font-bold text-gray-900 mb-2">$2,000/month</p>
                       <p className="text-5xl font-bold text-green-600">0%</p>
-                      <p className="text-sm text-gray-500 mt-2">FREE</p>
+                      <p className="text-sm text-gray-500 mt-2">commission</p>
                     </div>
                   </div>
                   
                   {/* 25% Tier */}
-                  <div className="relative bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-6 border-2 border-purple-300 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                  <div className="relative bg-gradient-to-br from-teal-50 via-cyan-50 to-blue-50 rounded-2xl p-6 border-2 border-teal-300 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                     <div className="text-center">
                       <p className="text-gray-600 text-sm mb-2">Between</p>
-                      <p className="text-3xl font-bold text-gray-900 mb-2">€2k - €5k</p>
-                      <p className="text-5xl font-bold text-purple-600">25%</p>
+                      <p className="text-3xl font-bold text-gray-900 mb-2">$2k - $5k</p>
+                      <p className="text-5xl font-bold text-teal-600">25%</p>
                       <p className="text-sm text-gray-500 mt-2">commission</p>
                     </div>
                   </div>
                   
                   {/* 20% Tier */}
-                  <div className="relative bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-6 border-2 border-purple-300 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                  <div className="relative bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-6 border-2 border-blue-300 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                     <div className="text-center">
                       <p className="text-gray-600 text-sm mb-2">Between</p>
                       <p className="text-3xl font-bold text-gray-900 mb-2">$5k - $10k</p>
-                      <p className="text-5xl font-bold text-purple-600">20%</p>
+                      <p className="text-5xl font-bold text-blue-600">20%</p>
                       <p className="text-sm text-gray-500 mt-2">commission</p>
                     </div>
                   </div>
                   
                   {/* 15% Tier */}
-                  <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border-2 border-purple-300 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                  <div className="relative bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 rounded-2xl p-6 border-2 border-purple-300 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                     <div className="text-center">
                       <p className="text-gray-600 text-sm mb-2">Between</p>
                       <p className="text-3xl font-bold text-gray-900 mb-2">$10k - $20k</p>
@@ -204,7 +204,7 @@ export default function HomePage() {
                   </div>
                   
                   {/* 10% Tier */}
-                  <div className="relative bg-gradient-to-br from-pink-50 to-pink-100 rounded-2xl p-6 border-2 border-pink-300 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                  <div className="relative bg-gradient-to-br from-pink-50 via-rose-50 to-orange-50 rounded-2xl p-6 border-2 border-pink-300 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                     <div className="text-center">
                       <p className="text-gray-600 text-sm mb-2">Between</p>
                       <p className="text-3xl font-bold text-gray-900 mb-2">$20k - $30k</p>
@@ -213,16 +213,18 @@ export default function HomePage() {
                     </div>
                   </div>
                   
-                  {/* 5% Tier */}
-                  <div className="relative bg-gradient-to-br from-purple-100 via-pink-100 to-purple-100 rounded-2xl p-6 border-2 border-purple-400 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+                  {/* 5% Tier - Premium Black/Gold */}
+                  <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl p-6 border-2 border-yellow-500/50 shadow-2xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 hover:scale-105 overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-t from-yellow-500/10 via-transparent to-transparent"></div>
+                    <div className="absolute -top-20 -right-20 w-40 h-40 bg-yellow-500/20 rounded-full blur-3xl"></div>
                     <div className="absolute -top-3 -right-3">
-                      <span className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">BEST</span>
+                      <span className="bg-gray-800/50 backdrop-blur text-yellow-400 text-xs font-bold px-3 py-1 rounded-full shadow-md">Soon...</span>
                     </div>
-                    <div className="text-center">
-                      <p className="text-gray-600 text-sm mb-2">Above</p>
-                      <p className="text-3xl font-bold text-gray-900 mb-2">€30k</p>
-                      <p className="text-5xl font-bold text-gradient">5%</p>
-                      <p className="text-sm text-gray-500 mt-2">commission</p>
+                    <div className="text-center relative z-10">
+                      <p className="text-yellow-400 text-sm mb-2">Above</p>
+                      <p className="text-3xl font-bold text-white mb-2">$30k</p>
+                      <p className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-500">5%</p>
+                      <p className="text-sm text-gray-400 mt-2">commission</p>
                     </div>
                   </div>
                 </div>
