@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@layer components {
+  .gradient-text {
+    @apply bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent;
+  }
+  
+  .gradient-bg {
+    @apply bg-gradient-to-r from-purple-600 to-pink-600;
+  }
+  
+  .card {
+    @apply bg-white rounded-2xl shadow-lg p-6;
+  }
+  
+  .btn-primary {
+    @apply px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium hover:shadow-lg transition-shadow;
+  }
+  
+  .btn-secondary {
+    @apply px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50;
+  }
+}
+
+@layer utilities {
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+  
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
+
+/* Range slider custom styles */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-track {
+  @apply h-2 rounded-lg;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  @apply w-5 h-5 rounded-full bg-white shadow-md border-2 border-purple-600;
+  margin-top: -6px;
+}
+
+input[type="range"]::-moz-range-track {
+  @apply h-2 rounded-lg;
+}
+
+input[type="range"]::-moz-range-thumb {
+  @apply w-5 h-5 rounded-full bg-white shadow-md border-2 border-purple-600;
+  border: none;
+}
