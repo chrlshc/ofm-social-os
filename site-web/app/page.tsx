@@ -187,7 +187,7 @@ export default function HomePage() {
                   <div className="relative bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-6 border-2 border-purple-300 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                     <div className="text-center">
                       <p className="text-gray-600 text-sm mb-2">Between</p>
-                      <p className="text-3xl font-bold text-gray-900 mb-2">€5k - €10k</p>
+                      <p className="text-3xl font-bold text-gray-900 mb-2">$5k - $10k</p>
                       <p className="text-5xl font-bold text-purple-600">20%</p>
                       <p className="text-sm text-gray-500 mt-2">commission</p>
                     </div>
@@ -197,7 +197,7 @@ export default function HomePage() {
                   <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border-2 border-purple-300 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                     <div className="text-center">
                       <p className="text-gray-600 text-sm mb-2">Between</p>
-                      <p className="text-3xl font-bold text-gray-900 mb-2">€10k - €20k</p>
+                      <p className="text-3xl font-bold text-gray-900 mb-2">$10k - $20k</p>
                       <p className="text-5xl font-bold text-purple-600">15%</p>
                       <p className="text-sm text-gray-500 mt-2">commission</p>
                     </div>
@@ -207,7 +207,7 @@ export default function HomePage() {
                   <div className="relative bg-gradient-to-br from-pink-50 to-pink-100 rounded-2xl p-6 border-2 border-pink-300 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                     <div className="text-center">
                       <p className="text-gray-600 text-sm mb-2">Between</p>
-                      <p className="text-3xl font-bold text-gray-900 mb-2">€20k - €30k</p>
+                      <p className="text-3xl font-bold text-gray-900 mb-2">$20k - $30k</p>
                       <p className="text-5xl font-bold text-pink-600">10%</p>
                       <p className="text-sm text-gray-500 mt-2">commission</p>
                     </div>
@@ -229,12 +229,12 @@ export default function HomePage() {
                 
                 {/* Example Calculation */}
                 <div className="mt-8 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200">
-                  <h4 className="font-semibold text-lg mb-3 text-center">💡 Example: If you earn €15,000/month</h4>
+                  <h4 className="font-semibold text-lg mb-3 text-center">💡 Example: If you earn $15,000/month</h4>
                   <div className="text-center">
-                    <p className="text-gray-600 mb-2">You're in the €10k - €20k tier</p>
+                    <p className="text-gray-600 mb-2">You're in the $10k - $20k tier</p>
                     <p className="text-3xl font-bold text-purple-600">You only pay 15%</p>
-                    <p className="text-lg text-gray-600 mt-2">Total commission: <span className="font-bold">€2,250</span></p>
-                    <p className="text-sm text-gray-500 mt-1">(15% of €15,000)</p>
+                    <p className="text-lg text-gray-600 mt-2">Total commission: <span className="font-bold">$2,250</span></p>
+                    <p className="text-sm text-gray-500 mt-1">(15% of $15,000)</p>
                   </div>
                   <div className="mt-4 p-4 bg-white rounded-lg">
                     <p className="text-sm text-gray-600 text-center">

@@ -7,14 +7,14 @@ export const metadata: Metadata = {
     'Discover the transparent commission system of OFM Social OS. No monthly fees, just a fair commission that decreases as your revenue grows.',
 };
 
-// Définition des paliers de commission.
+// Définition des paliers de commission avec design progressif
 const tiers = [
-  { range: '< €2k/month', rate: '0%', badge: 'FREE' },
-  { range: '€2k – €5k', rate: '25%', badge: null },
-  { range: '€5k – €10k', rate: '20%', badge: null },
-  { range: '€10k – €20k', rate: '15%', badge: null },
-  { range: '€20k – €30k', rate: '10%', badge: null },
-  { range: 'Above €30k', rate: '5%', badge: 'BEST' },
+  { range: 'Under', amount: '$2,000/month', rate: '0%', badge: 'FREE', color: 'green' },
+  { range: 'Between', amount: '$2k - $5k', rate: '25%', badge: null, color: 'teal' },
+  { range: 'Between', amount: '$5k - $10k', rate: '20%', badge: null, color: 'blue' },
+  { range: 'Between', amount: '$10k - $20k', rate: '15%', badge: null, color: 'purple' },
+  { range: 'Between', amount: '$20k - $30k', rate: '10%', badge: null, color: 'pink' },
+  { range: 'Above', amount: '$30k', rate: '5%', badge: null, color: 'gold', isPremium: true },
 ];
 
 export default function PricingPage() {
@@ -33,32 +33,90 @@ export default function PricingPage() {
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {tiers.map((tier, index) => (
-            <div
-              key={index}
-              className="relative p-6 rounded-2xl shadow-md border border-purple-200 bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 text-center overflow-hidden"
-            >
-              {tier.badge && (
-                <span className="absolute top-3 right-3 text-xs font-semibold text-white bg-gradient-to-r from-pink-500 to-purple-500 rounded-full px-3 py-1">
-                  {tier.badge}
-                </span>
-              )}
-              <div className="text-lg font-medium text-gray-700 mb-1">
-                {tier.range}
+          {tiers.map((tier, index) => {
+            const getCardStyles = () => {
+              if (tier.isPremium) {
+                return "bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 border-2 border-yellow-500/50 shadow-2xl transform hover:scale-105 transition-all duration-300";
+              }
+              
+              const colorMap: Record<string, string> = {
+                green: "bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 border-green-200",
+                teal: "bg-gradient-to-br from-teal-50 via-cyan-50 to-blue-50 border-teal-200",
+                blue: "bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-blue-200",
+                purple: "bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 border-purple-200",
+                pink: "bg-gradient-to-br from-pink-50 via-rose-50 to-orange-50 border-pink-200",
+              };
+              
+              return colorMap[tier.color || ''] || "bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 border-purple-200";
+            };
+
+            const getTextStyles = () => {
+              if (tier.isPremium) {
+                return {
+                  range: "text-yellow-400",
+                  amount: "text-white",
+                  rate: "text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-500",
+                  commission: "text-gray-400",
+                };
+              }
+
+              const colorTextMap: Record<string, { rate: string }> = {
+                green: { rate: "text-green-600" },
+                teal: { rate: "text-teal-600" },
+                blue: { rate: "text-blue-600" },
+                purple: { rate: "text-purple-600" },
+                pink: { rate: "text-pink-600" },
+              };
+
+              return {
+                range: "text-gray-600",
+                amount: "text-gray-900",
+                rate: colorTextMap[tier.color || '']?.rate || "text-purple-600",
+                commission: "text-gray-500",
+              };
+            };
+
+            const styles = getTextStyles();
+
+            return (
+              <div
+                key={index}
+                className={`relative p-6 rounded-2xl shadow-md border text-center overflow-hidden ${getCardStyles()}`}
+              >
+                {tier.badge && (
+                  <span className="absolute top-3 right-3 text-xs font-semibold text-white bg-gradient-to-r from-green-500 to-emerald-500 rounded-full px-3 py-1">
+                    {tier.badge}
+                  </span>
+                )}
+                {tier.isPremium && (
+                  <>
+                    <div className="absolute inset-0 bg-gradient-to-t from-yellow-500/10 via-transparent to-transparent"></div>
+                    <div className="absolute -top-20 -right-20 w-40 h-40 bg-yellow-500/20 rounded-full blur-3xl"></div>
+                    <span className="absolute top-3 right-3 text-xs font-semibold text-yellow-400 bg-gray-800/50 backdrop-blur rounded-full px-3 py-1">
+                      Soon...
+                    </span>
+                  </>
+                )}
+                <div className={`text-sm font-medium mb-1 ${styles.range}`}>
+                  {tier.range}
+                </div>
+                <div className={`text-lg font-bold mb-3 ${styles.amount}`}>
+                  {tier.amount}
+                </div>
+                <div className={`text-5xl font-extrabold mb-1 ${styles.rate}`}>
+                  {tier.rate}
+                </div>
+                <div className={`text-sm ${styles.commission}`}>
+                  commission
+                </div>
               </div>
-              <div className="text-5xl font-extrabold text-purple-600 mb-1">
-                {tier.rate}
-              </div>
-              <div className="text-sm text-gray-500">
-                Commission
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
       {/* Why Creators Choose Us */}
-      <section className="space-y-8 bg-gradient-to-b from-purple-50 via-pink-50 to-white rounded-2xl p-10">
+      <section className="space-y-8 bg-gradient-to-b from-purple-50 via-pink-50 to-purple-50/30 rounded-2xl p-10">
         <h2 className="text-3xl sm:text-4xl font-bold text-center text-purple-700">
           Why Creators Choose Us
         </h2>
