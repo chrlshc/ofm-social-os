@@ -455,7 +455,7 @@ export default function HomePage() {
                   <p className="text-sm text-gray-700">Send personalized voice notes automatically</p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3 md:pl-8">
                 <span className="text-green-500 text-xl">✓</span>
                 <div>
                   <h4 className="font-semibold mb-1 text-gray-900">Smart Price Testing</h4>
@@ -469,7 +469,7 @@ export default function HomePage() {
                   <p className="text-sm text-gray-700">Automated rewards for your most loyal subscribers</p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3 md:pl-8">
                 <span className="text-green-500 text-xl">✓</span>
                 <div>
                   <h4 className="font-semibold mb-1 text-gray-900">Content Performance AI</h4>
