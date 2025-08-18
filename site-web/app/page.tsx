@@ -217,9 +217,6 @@ export default function HomePage() {
                   <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl p-6 border-2 border-yellow-500/50 shadow-2xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 hover:scale-105 overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-t from-yellow-500/10 via-transparent to-transparent"></div>
                     <div className="absolute -top-20 -right-20 w-40 h-40 bg-yellow-500/20 rounded-full blur-3xl"></div>
-                    <div className="absolute -top-3 -right-3">
-                      <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-gray-900 text-xs font-bold px-3 py-1 rounded-full shadow-md">Soon...</span>
-                    </div>
                     <div className="text-center relative z-10">
                       <p className="text-yellow-400 text-sm mb-2">Above</p>
                       <p className="text-3xl font-bold text-white mb-2">$30k</p>

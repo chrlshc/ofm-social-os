@@ -92,9 +92,6 @@ export default function PricingPage() {
                   <>
                     <div className="absolute inset-0 bg-gradient-to-t from-yellow-500/10 via-transparent to-transparent"></div>
                     <div className="absolute -top-20 -right-20 w-40 h-40 bg-yellow-500/20 rounded-full blur-3xl"></div>
-                    <span className="absolute top-3 right-3 text-xs font-semibold text-gray-900 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-full px-3 py-1">
-                      Soon...
-                    </span>
                   </>
                 )}
                 <div className={`text-sm font-medium mb-1 ${styles.range}`}>
