@@ -61,6 +61,9 @@ export const metadata: Metadata = {
   verification: {
     google: 'google-site-verification-code',
     yandex: 'yandex-verification-code',
+    other: {
+      'facebook-domain-verification': 'your-facebook-verification-code',
+    },
   },
 };
 
