@@ -15,6 +15,15 @@ export default function DemoPage() {
     }, 1500);
   };
 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
   const handleVideoUpload = () => {
     setIsUploading(true);
     setTimeout(() => {
@@ -87,6 +96,7 @@ export default function DemoPage() {
                     accept="video/*"
                     className="hidden"
                     id="video-upload"
+                    onChange={handleFileSelect}
                   />
                   <label
                     htmlFor="video-upload"
@@ -94,6 +104,11 @@ export default function DemoPage() {
                   >
                     Choose Video
                   </label>
+                  {selectedFile && (
+                    <p className="mt-2 text-sm text-gray-600">
+                      Selected: {selectedFile.name}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-3">
@@ -116,8 +131,8 @@ export default function DemoPage() {
 
                   <button
                     onClick={handleVideoUpload}
-                    disabled={isUploading}
-                    className="w-full bg-gradient-to-r from-pink-500 to-purple-500 text-white py-3 rounded-lg font-semibold hover:from-pink-600 hover:to-purple-600 transition disabled:opacity-50"
+                    disabled={isUploading || !selectedFile}
+                    className="w-full bg-gradient-to-r from-pink-500 to-purple-500 text-white py-3 rounded-lg font-semibold hover:from-pink-600 hover:to-purple-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isUploading ? (
                       <span className="flex items-center justify-center gap-2">
