@@ -5,6 +5,7 @@ import Navigation from '../components/navigation';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://huntaze.com'),
+  applicationName: 'Huntaze',
   title: {
     default: 'Huntaze - AI Platform for Content Creators | Automate & Scale',
     template: '%s | Huntaze',
