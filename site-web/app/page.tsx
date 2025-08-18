@@ -438,7 +438,7 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto relative z-10">
           <div className="text-center mb-12">
             <span className="inline-block text-sm font-semibold text-purple-700 uppercase tracking-wider mb-2">Built by Creators, For Creators</span>
-            <h2 className="text-3xl md:text-5xl font-bold mb-4 text-gray-900">Continuous <span className="text-gradient bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Innovation</span></h2>
+            <h2 className="text-3xl md:text-5xl font-bold mb-4 text-gray-900">Innovation <span className="text-gradient bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Continue</span></h2>
             <p className="text-lg md:text-xl text-gray-800 max-w-3xl mx-auto">
               Our platform evolves continuously based on feedback from our community of successful creators.
             </p>
