@@ -446,7 +446,7 @@ export default function HomePage() {
           
           
           <div className="bg-white rounded-2xl p-8 shadow-lg border border-purple-200">
-            <h3 className="text-2xl font-bold mb-6 text-center text-gray-900">Recently Added Features</h3>
+            <h3 className="text-2xl font-bold mb-6 text-center text-gray-900 md:pl-4">Recently Added Features</h3>
             <div className="grid md:grid-cols-2 gap-6">
               <div className="flex items-start gap-3">
                 <span className="text-green-500 text-xl">✓</span>
