@@ -218,7 +218,7 @@ export default function HomePage() {
                     <div className="absolute inset-0 bg-gradient-to-t from-yellow-500/10 via-transparent to-transparent"></div>
                     <div className="absolute -top-20 -right-20 w-40 h-40 bg-yellow-500/20 rounded-full blur-3xl"></div>
                     <div className="absolute -top-3 -right-3">
-                      <span className="bg-gray-800/50 backdrop-blur text-yellow-400 text-xs font-bold px-3 py-1 rounded-full shadow-md">Soon...</span>
+                      <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-gray-900 text-xs font-bold px-3 py-1 rounded-full shadow-md">Soon...</span>
                     </div>
                     <div className="text-center relative z-10">
                       <p className="text-yellow-400 text-sm mb-2">Above</p>
@@ -409,7 +409,7 @@ export default function HomePage() {
             {/* Next Features - Card 6 */}
             <div className="girly-card p-6 md:p-8">
               <Sparkles className="w-10 h-10 md:w-12 md:h-12 text-purple-600 mb-4" aria-hidden="true" />
-              <h3 className="mb-3">Soon...</h3>
+              <h3 className="mb-3">Community Driven</h3>
               <p className="mb-4">
                 Every Monday, we ask our community to vote on new features. The most requested features get built within 7 days.
               </p>
