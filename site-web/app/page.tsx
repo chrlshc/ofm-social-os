@@ -443,47 +443,6 @@ export default function HomePage() {
               Our platform evolves continuously based on feedback from our community of successful creators.
             </p>
           </div>
-          
-          
-          <div className="bg-white rounded-2xl p-8 shadow-lg border border-purple-200">
-            <h3 className="text-2xl font-bold mb-6 text-center text-gray-900 md:pl-4">Recently Added Features</h3>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="flex items-start gap-3">
-                <span className="text-green-500 text-xl">✓</span>
-                <div>
-                  <h4 className="font-semibold mb-1 text-gray-900">Auto Voice Messages</h4>
-                  <p className="text-sm text-gray-700">Send personalized voice notes automatically</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 md:pl-8">
-                <span className="text-green-500 text-xl">✓</span>
-                <div>
-                  <h4 className="font-semibold mb-1 text-gray-900">Smart Price Testing</h4>
-                  <p className="text-sm text-gray-700">A/B test your content prices for max revenue</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="text-green-500 text-xl">✓</span>
-                <div>
-                  <h4 className="font-semibold mb-1 text-gray-900">Fan Loyalty Rewards</h4>
-                  <p className="text-sm text-gray-700">Automated rewards for your most loyal subscribers</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 md:pl-8">
-                <span className="text-green-500 text-xl">✓</span>
-                <div>
-                  <h4 className="font-semibold mb-1 text-gray-900">Content Performance AI</h4>
-                  <p className="text-sm text-gray-700">Predict which content will perform best</p>
-                </div>
-              </div>
-            </div>
-            <div className="mt-8 text-center">
-              <p className="text-gray-700 mb-4">Join our community and help shape the future of the platform!</p>
-              <Button asChild className="btn-primary">
-                <Link href="/join">Get Early Access</Link>
-              </Button>
-            </div>
-          </div>
         </div>
       </section>
 
