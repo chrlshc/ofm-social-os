@@ -10,6 +10,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@types/cron": "^2.0.1",
+    "cron": "^4.3.3",
     "lucide-react": "^0.292.0",
     "next": "^14.0.0",
     "react": "^18.2.0",
