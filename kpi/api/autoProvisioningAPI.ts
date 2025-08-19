@@ -279,13 +279,17 @@ export class AutoProvisioningAPI {
       // Créer la règle complète
       const rule: ScalingRule = {
         ...ruleData,
+        trigger: {
+          ...ruleData.trigger,
+          degradationLevel: ruleData.trigger.degradationLevel as ('low' | 'medium' | 'high' | 'critical')[]
+        },
         metadata: {
           ...ruleData.metadata,
           triggerCount: 0,
           effectiveness: 0.8, // Default effectiveness
           averageRecoveryTime: 300 // 5 minutes default
         }
-      };
+      } as ScalingRule;
 
       this.provisioningManager.addScalingRule(rule);
 
@@ -316,7 +320,7 @@ export class AutoProvisioningAPI {
   private async updateScalingRule(req: Request, res: Response): Promise<void> {
     const ruleId = req.params.ruleId;
     const rules = this.provisioningManager.getScalingRules();
-    const existingRule = rules.find(r => r.id === ruleId);
+    const existingRule = rules.find((r: ScalingRule) => r.id === ruleId);
 
     if (!existingRule) {
       throw createError.notFound(`Scaling rule not found: ${ruleId}`);
@@ -330,11 +334,15 @@ export class AutoProvisioningAPI {
 
       const updatedRule: ScalingRule = {
         ...updatedRuleData,
+        trigger: {
+          ...updatedRuleData.trigger,
+          degradationLevel: updatedRuleData.trigger.degradationLevel as ('low' | 'medium' | 'high' | 'critical')[]
+        },
         metadata: {
           ...existingRule.metadata,
           ...updatedRuleData.metadata
         }
-      };
+      } as ScalingRule;
 
       // Remove old rule and add updated one
       this.provisioningManager.removeScalingRule(ruleId);
