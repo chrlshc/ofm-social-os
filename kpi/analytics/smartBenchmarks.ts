@@ -552,5 +552,12 @@ export class SmartBenchmarkAnalyzer {
  * Factory pour créer un analyseur de benchmarks intelligents
  */
 export function createSmartBenchmarkAnalyzer(config?: Partial<SmartBenchmarkConfig>): SmartBenchmarkAnalyzer {
-  return new SmartBenchmarkAnalyzer(config);
+  const fullConfig: SmartBenchmarkConfig = {
+    useAdaptiveWindows: true,
+    contextualFilters: {},
+    confidenceThreshold: 0.7,
+    minSampleSize: 20,
+    ...config
+  };
+  return new SmartBenchmarkAnalyzer(fullConfig);
 }
