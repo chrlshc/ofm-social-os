@@ -154,7 +154,7 @@ export class SmartBenchmarkAnalyzer {
         AND created_at > NOW() - INTERVAL '${timeWindow}'
     `;
     
-    const params = [metricName, modelName];
+    const params: any[] = [metricName, modelName];
     let paramIndex = 3;
 
     // Filtres contextuels
