@@ -172,7 +172,7 @@ export class AdaptiveAnalyticsAPI {
       
       const config: Partial<SmartBenchmarkConfig> = {
         useAdaptiveWindows: validatedData.useAdaptiveWindows,
-        contextualFilters: validatedData.context || {},
+        contextualFilters: validatedData.context as SmartBenchmarkConfig['contextualFilters'] || {},
         confidenceThreshold: validatedData.confidenceThreshold,
         minSampleSize: validatedData.minSampleSize
       };
@@ -180,7 +180,7 @@ export class AdaptiveAnalyticsAPI {
       const analyzer = createSmartBenchmarkAnalyzer(config);
       const benchmarks = await analyzer.computeSmartBenchmarks(
         validatedData.metricName,
-        validatedData.context
+        validatedData.context as Partial<SmartBenchmarkConfig['contextualFilters']>
       );
 
       res.json({
@@ -215,7 +215,7 @@ export class AdaptiveAnalyticsAPI {
       
       const config: Partial<SmartBenchmarkConfig> = {
         useAdaptiveWindows: validatedData.useAdaptiveWindows,
-        contextualFilters: validatedData.context || {},
+        contextualFilters: validatedData.context as SmartBenchmarkConfig['contextualFilters'] || {},
         confidenceThreshold: validatedData.confidenceThreshold,
         minSampleSize: validatedData.minSampleSize
       };
@@ -223,7 +223,7 @@ export class AdaptiveAnalyticsAPI {
       const analyzer = createSmartBenchmarkAnalyzer(config);
       const opportunities = await analyzer.detectSmartLearningOpportunities(
         validatedData.metricName,
-        validatedData.context
+        validatedData.context as Partial<SmartBenchmarkConfig['contextualFilters']>
       );
 
       res.json({
