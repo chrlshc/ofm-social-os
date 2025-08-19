@@ -429,7 +429,7 @@ export class AdaptiveWindowManager {
         }
         
       } catch (error) {
-        console.warn(`Failed to analyze ${config.modelName}.${config.metricName}:`, error.message);
+        console.warn(`Failed to analyze ${config.modelName}.${config.metricName}:`, error instanceof Error ? error.message : 'Unknown error');
         skipped++;
       }
     }
@@ -493,7 +493,7 @@ export class AdaptiveWindowManager {
           }
           
         } catch (error) {
-          console.warn(`Failed to analyze ${key}:`, error.message);
+          console.warn(`Failed to analyze ${key}:`, error instanceof Error ? error.message : 'Unknown error');
         }
       }
     }
