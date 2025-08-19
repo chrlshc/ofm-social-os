@@ -369,4 +369,5 @@ export function startAlertService(schedule?: string) {
 }
 
 // Export pour les tests
-export { AlertService, AlertRule };
+export { AlertService };
+export type { AlertRule };
