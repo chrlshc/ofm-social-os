@@ -60,7 +60,7 @@ ${includeActionItems ? 'Inclus des actions concrètes à prendre immédiatement.
     console.error('Error generating AI recommendations:', error);
     return [{
       modelName,
-      insight: `Erreur lors de la génération des recommandations: ${error.message}`,
+      insight: `Erreur lors de la génération des recommandations: ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
       timestamp: new Date(),
       category: 'error',
       priority: 'high',
