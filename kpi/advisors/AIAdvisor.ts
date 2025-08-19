@@ -48,23 +48,19 @@ ${includeActionItems ? 'Inclus des actions concrètes à prendre immédiatement.
     return response
       .split('\n')
       .filter(line => line.trim().length > 0)
-      .map((line, index) => ({
+      .map((line) => ({
         modelName,
         insight: line.trim(),
-        timestamp: new Date(),
-        category: 'ai_recommendation',
-        priority: options.priorityLevel || 'medium',
-        id: `ai_rec_${modelName}_${Date.now()}_${index}`
+        severity: 'info' as const,
+        createdAt: new Date()
       }));
   } catch (error) {
     console.error('Error generating AI recommendations:', error);
     return [{
       modelName,
       insight: `Erreur lors de la génération des recommandations: ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
-      timestamp: new Date(),
-      category: 'error',
-      priority: 'high',
-      id: `ai_error_${modelName}_${Date.now()}`
+      severity: 'critical',
+      createdAt: new Date()
     }];
   }
 }
