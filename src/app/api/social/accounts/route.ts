@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     );
     
     // Group by platform and add status
-    const accounts = result.rows.map(account => ({
+    const accounts = result.rows.map((account: any) => ({
       ...account,
       is_expired: account.expires_at ? new Date(account.expires_at) < new Date() : false,
       expires_in_hours: account.expires_at 
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       accounts: accounts,
-      platforms_connected: [...new Set(accounts.map(a => a.platform))],
+      platforms_connected: [...new Set(accounts.map((a: any) => a.platform))],
       total: accounts.length
     });
     
