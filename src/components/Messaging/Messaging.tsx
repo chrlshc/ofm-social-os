@@ -418,7 +418,9 @@ const Messaging: React.FC = () => {
             <div className="text-center">
               <div className="mb-4">
                 <div className="w-20 h-20 mx-auto bg-gray-100 rounded-full flex items-center justify-center">
-                  <MessageCircle size={40} className="text-gray-400" />
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
                 </div>
               </div>
               <p className="text-lg font-medium">Sélectionnez une conversation</p>
