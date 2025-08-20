@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '@/server/db';
-import { publishToSocial } from '@/server/social/publish';
+import { publishToSocial } from '@/server/social/publish-simple';
 import { log } from '@/lib/observability';
 import { requireHuntazeStripeOnboarding, requireHuntazeAuth } from '@/lib/huntaze-auth';
 import { validateRequest, publishPostSchema, getPostsSchema } from '@/lib/validation';

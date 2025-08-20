@@ -46,8 +46,14 @@ export async function POST(request: NextRequest) {
       [email, instagram, niche, timezone, consent]
     );
     
-    // TODO: Envoyer l'email de bienvenue
-    // await sendWelcomeEmail(email);
+    // Envoyer l'email de bienvenue avec AWS SES
+    try {
+      const { sendWelcomeEmail } = await import('@/services/ses-email');
+      await sendWelcomeEmail(email);
+    } catch (emailError) {
+      console.error('Failed to send welcome email:', emailError);
+      // Continue anyway - don't fail the signup
+    }
     
     // Log pour debug
     console.log('New waitlist signup:', { email, instagram, niche });

@@ -27,9 +27,12 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().startsWith('sk_'),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_'),
   
-  // AWS KMS (optional for now)
+  // AWS (optional for now)
   AWS_REGION: z.string().optional(),
   AWS_KMS_KEY_ID: z.string().optional(),
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  SES_FROM_EMAIL: z.string().email().optional(),
   
   // App
   NEXT_PUBLIC_URL: z.string().url(),

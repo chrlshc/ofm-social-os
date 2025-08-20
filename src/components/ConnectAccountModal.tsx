@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 interface ConnectAccountModalProps {
   isOpen: boolean;
   onClose: () => void;
-  userId: number;
+  userId?: number;
   onAccountConnected?: () => void;
 }
 
@@ -51,7 +51,8 @@ export default function ConnectAccountModal({
     
     try {
       // Redirect to OAuth flow
-      window.location.href = `/api/social/auth/${platformId}?user_id=${userId}`;
+      // userId is now optional - gets from session
+      window.location.href = `/api/social/auth/${platformId}`;
     } catch (error) {
       console.error('Failed to initiate connection:', error);
       setConnecting(null);
@@ -105,11 +106,6 @@ export default function ConnectAccountModal({
                   <div>
                     <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                       {platform.name}
-                      {platform.comingSoon && (
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                          Bientôt
-                        </span>
-                      )}
                     </h3>
                     <p className="text-sm text-gray-600">{platform.description}</p>
                   </div>

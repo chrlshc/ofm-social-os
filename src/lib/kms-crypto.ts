@@ -109,7 +109,7 @@ export async function decrypt(encryptedData: string): Promise<string> {
   const decipher = crypto.createDecipheriv(algorithm, key, iv);
   decipher.setAuthTag(authTag);
   
-  let decrypted = decipher.update(encrypted, null, 'utf8');
+  let decrypted = decipher.update(encrypted, undefined, 'utf8');
   decrypted += decipher.final('utf8');
   
   return decrypted;

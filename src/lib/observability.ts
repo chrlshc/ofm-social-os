@@ -1,5 +1,24 @@
 import { Pool } from 'pg';
 
+// Simple log function
+export function log(level: string, message: string, data?: any) {
+  const timestamp = new Date().toISOString();
+  const logData = {
+    timestamp,
+    level,
+    message,
+    ...data
+  };
+  
+  if (level === 'error') {
+    console.error(JSON.stringify(logData));
+  } else if (level === 'warn') {
+    console.warn(JSON.stringify(logData));
+  } else {
+    console.log(JSON.stringify(logData));
+  }
+}
+
 // Liste des clés sensibles à masquer
 const SENSITIVE_KEYS = [
   'access_token',
