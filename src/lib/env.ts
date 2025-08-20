@@ -32,7 +32,7 @@ const envSchema = z.object({
   AWS_KMS_KEY_ID: z.string().default(''),
   AWS_ACCESS_KEY_ID: z.string().default(''),
   AWS_SECRET_ACCESS_KEY: z.string().default(''),
-  SES_FROM_EMAIL: z.string().default('noreply@huntaze.com'),
+  SES_FROM_EMAIL: z.string().default('charles@huntaze.com'),
   
   // App
   NEXT_PUBLIC_URL: z.string().default('https://huntaze.com'),

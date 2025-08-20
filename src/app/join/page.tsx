@@ -174,7 +174,7 @@ export default function JoinPage() {
                   Check your email for confirmation and next steps.
                 </p>
                 <p className="text-sm text-gray-500">
-                  Didn't receive it? Check your spam folder or contact support@huntaze.com
+                  Didn't receive it? Check your spam folder or contact charles@huntaze.com
                 </p>
               </div>
             ) : (

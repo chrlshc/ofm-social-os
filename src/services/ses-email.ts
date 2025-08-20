@@ -13,7 +13,7 @@ const sesClient = new SESClient({
 export async function sendWelcomeEmail(to: string) {
   try {
     const params = {
-      Source: env.SES_FROM_EMAIL || 'Huntaze <noreply@huntaze.com>',
+      Source: env.SES_FROM_EMAIL || 'Huntaze <charles@huntaze.com>',
       Destination: {
         ToAddresses: [to],
       },
@@ -51,7 +51,7 @@ export async function sendWelcomeEmail(to: string) {
                   <hr style="border: 1px solid #e5e7eb; margin: 30px 0;">
                   
                   <p style="color: #9ca3af; font-size: 14px;">
-                    If you have any questions, reply to this email or contact support@huntaze.com
+                    If you have any questions, reply to this email or contact charles@huntaze.com
                   </p>
                 </div>
               </div>
@@ -73,7 +73,7 @@ What happens next?
 
 Pro tip: Follow us on social media for updates and creator success stories!
 
-If you have any questions, reply to this email or contact support@huntaze.com
+If you have any questions, reply to this email or contact charles@huntaze.com
 
 Best regards,
 The Huntaze Team
@@ -100,9 +100,9 @@ export async function verifySESConfig() {
   try {
     // Test avec un email de vérification
     const testParams = {
-      Source: env.SES_FROM_EMAIL || 'noreply@huntaze.com',
+      Source: env.SES_FROM_EMAIL || 'charles@huntaze.com',
       Destination: {
-        ToAddresses: [env.SES_FROM_EMAIL || 'noreply@huntaze.com'],
+        ToAddresses: [env.SES_FROM_EMAIL || 'charles@huntaze.com'],
       },
       Message: {
         Subject: { Data: 'SES Configuration Test' },
