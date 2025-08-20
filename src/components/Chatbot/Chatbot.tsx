@@ -42,7 +42,7 @@ const Chatbot: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      content: 'Bonjour ! Je suis votre assistant OFM IA. Je peux vous aider à optimiser votre stratégie de contenu, améliorer votre engagement, et répondre à toutes vos questions. Que puis-je faire pour vous aujourd\'hui ?',
+      content: 'Bonjour ! Je suis votre assistant Huntaze. Je peux vous aider à optimiser votre stratégie de contenu, améliorer votre engagement, et répondre à toutes vos questions. Que puis-je faire pour vous aujourd\'hui ?',
       sender: 'ai',
       timestamp: new Date()
     }
@@ -208,7 +208,7 @@ const Chatbot: React.FC = () => {
               <Bot className="text-white" size={24} />
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">Assistant OFM IA</h1>
+              <h1 className="text-xl font-semibold text-gray-900">Assistant Huntaze</h1>
               <p className="text-sm text-gray-500">Toujours là pour vous aider</p>
             </div>
           </div>
@@ -343,7 +343,7 @@ const Chatbot: React.FC = () => {
           
           <div className="flex items-center justify-center gap-2 mt-3 text-xs text-gray-500">
             <Sparkles size={12} />
-            <span>Propulsé par l'IA OFM</span>
+            <span>Propulsé par l'IA Huntaze</span>
           </div>
         </div>
       </div>

@@ -39,7 +39,7 @@ export default function Layout({ children }: LayoutProps) {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
           <div className="flex items-center justify-between p-6 border-b">
-            <h1 className="text-2xl font-bold gradient-text">OFM IA</h1>
+            <h1 className="text-2xl font-bold gradient-text">Huntaze</h1>
             <button
               onClick={() => setSidebarOpen(false)}
               className="lg:hidden"
@@ -89,7 +89,7 @@ export default function Layout({ children }: LayoutProps) {
             >
               <Menu size={24} />
             </button>
-            <h1 className="text-xl font-bold gradient-text">OFM IA</h1>
+            <h1 className="text-xl font-bold gradient-text">Huntaze</h1>
             <div className="w-10" />
           </div>
 

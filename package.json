@@ -1,7 +1,7 @@
 {
-  "name": "ofm-ia-dashboard",
+  "name": "huntaze-dashboard",
   "version": "1.0.0",
-  "description": "OFM IA Dashboard - Interface post-inscription pour créateurs de contenu",
+  "description": "Huntaze Dashboard - Interface post-inscription pour créateurs de contenu",
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
@@ -44,6 +44,6 @@
     "tsx": "^4.20.4",
     "typescript": "^5.9.2"
   },
-  "author": "OFM IA",
+  "author": "Huntaze",
   "license": "MIT"
 }
