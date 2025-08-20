@@ -44,7 +44,11 @@ export async function encrypt(plaintext: string): Promise<string> {
   
   // Local AES-256-GCM encryption
   const algorithm = 'aes-256-gcm';
-  const key = Buffer.from(env.CRYPTO_MASTER_KEY, 'base64').slice(0, 32);
+  // For build time, use a temporary key
+  const masterKey = env.CRYPTO_MASTER_KEY === 'default-key-for-build-only-not-for-production' 
+    ? crypto.randomBytes(32).toString('base64')
+    : env.CRYPTO_MASTER_KEY;
+  const key = Buffer.from(masterKey, 'base64').slice(0, 32);
   const iv = crypto.randomBytes(16);
   
   const cipher = crypto.createCipheriv(algorithm, key, iv);
@@ -97,7 +101,11 @@ export async function decrypt(encryptedData: string): Promise<string> {
     : encryptedData;
   
   const algorithm = 'aes-256-gcm';
-  const key = Buffer.from(env.CRYPTO_MASTER_KEY, 'base64').slice(0, 32);
+  // For build time, use a temporary key
+  const masterKey = env.CRYPTO_MASTER_KEY === 'default-key-for-build-only-not-for-production' 
+    ? crypto.randomBytes(32).toString('base64')
+    : env.CRYPTO_MASTER_KEY;
+  const key = Buffer.from(masterKey, 'base64').slice(0, 32);
   
   const combined = Buffer.from(data, 'base64');
   
