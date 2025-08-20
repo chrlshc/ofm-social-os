@@ -9,9 +9,8 @@ const getDatabaseUrl = (): string => {
   
   if (env === 'production') {
     return process.env.DATABASE_URL_OFM_PRODUCTION || '';
-  } else if ((env as string) === 'staging') {
-    return process.env.DATABASE_URL_OFM_STAGING || '';
   } else {
+    // For development, staging, or any other environment
     return process.env.DATABASE_URL_OFM_DEV || process.env.DATABASE_URL_OFM_PRODUCTION || '';
   }
 };
