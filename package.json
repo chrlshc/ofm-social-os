@@ -1,7 +1,7 @@
 {
   "name": "huntaze-dashboard",
   "version": "1.0.0",
-  "description": "Huntaze Dashboard - Interface post-inscription pour créateurs de contenu",
+  "description": "Huntaze Dashboard - Post-registration interface for content creators",
   "main": "index.js",
   "scripts": {
     "dev": "next dev",

@@ -14,7 +14,7 @@ const platforms = [
     id: 'reddit',
     name: 'Reddit',
     icon: '🔴',
-    description: 'Publiez sur vos subreddits favoris',
+    description: 'Post to your favorite subreddits',
     color: 'bg-orange-500',
     available: true
   },
@@ -22,7 +22,7 @@ const platforms = [
     id: 'instagram',
     name: 'Instagram',
     icon: '📷',
-    description: 'Partagez des Reels et Stories',
+    description: 'Share Reels and Stories',
     color: 'bg-gradient-to-r from-purple-500 to-pink-500',
     available: true
   },
@@ -30,7 +30,7 @@ const platforms = [
     id: 'tiktok',
     name: 'TikTok',
     icon: '🎵',
-    description: 'Créez des vidéos virales',
+    description: 'Create viral videos',
     color: 'bg-black',
     available: true
   }
@@ -66,7 +66,7 @@ export default function ConnectAccountModal({
         <div className="p-6 border-b">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-900">
-              Connecter un compte social
+              Connect a social account
             </h2>
             <button
               onClick={onClose}
@@ -78,7 +78,7 @@ export default function ConnectAccountModal({
             </button>
           </div>
           <p className="mt-2 text-sm text-gray-600">
-            Connectez vos comptes pour publier automatiquement
+            Connect your accounts to publish automatically
           </p>
         </div>
         
@@ -130,10 +130,10 @@ export default function ConnectAccountModal({
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        Connexion...
+                        Connecting...
                       </span>
                     ) : (
-                      'Connecter'
+                      'Connect'
                     )}
                   </button>
                 )}
@@ -145,7 +145,7 @@ export default function ConnectAccountModal({
         {/* Footer */}
         <div className="p-6 border-t bg-gray-50 rounded-b-xl">
           <p className="text-xs text-gray-500 text-center">
-            Vos données sont chiffrées et sécurisées. Vous pouvez déconnecter vos comptes à tout moment.
+            Your data is encrypted and secure. You can disconnect your accounts at any time.
           </p>
         </div>
       </div>

@@ -42,7 +42,7 @@ const Chatbot: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      content: 'Bonjour ! Je suis votre assistant Huntaze. Je peux vous aider à optimiser votre stratégie de contenu, améliorer votre engagement, et répondre à toutes vos questions. Que puis-je faire pour vous aujourd\'hui ?',
+      content: 'Hello! I\'m your Huntaze assistant. I can help you optimize your content strategy, improve your engagement, and answer all your questions. What can I do for you today?',
       sender: 'ai',
       timestamp: new Date()
     }
@@ -122,7 +122,7 @@ const Chatbot: React.FC = () => {
       
       const errorMessage: ChatMessage = {
         id: `ai-error-${Date.now()}`,
-        content: 'Désolé, une erreur s\'est produite. Veuillez réessayer.',
+        content: 'Sorry, an error occurred. Please try again.',
         sender: 'ai',
         timestamp: new Date()
       };
@@ -165,7 +165,7 @@ const Chatbot: React.FC = () => {
   const resetConversation = () => {
     setMessages([{
       id: `ai-${Date.now()}`,
-      content: 'Nouvelle conversation démarrée. Comment puis-je vous aider ?',
+      content: 'New conversation started. How can I help you?',
       sender: 'ai',
       timestamp: new Date()
     }]);
@@ -186,15 +186,15 @@ const Chatbot: React.FC = () => {
 
   const suggestions = [
     {
-      text: 'Comment améliorer mon engagement ?',
+      text: 'How to improve my engagement?',
       icon: <TrendingUp size={16} />
     },
     {
-      text: 'Idées de contenu pour cette semaine',
+      text: 'Content ideas for this week',
       icon: <Lightbulb size={16} />
     },
     {
-      text: 'Analyser mes performances récentes',
+      text: 'Analyze my recent performance',
       icon: <MessageSquare size={16} />
     }
   ];
@@ -208,15 +208,15 @@ const Chatbot: React.FC = () => {
               <Bot className="text-white" size={24} />
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">Assistant Huntaze</h1>
-              <p className="text-sm text-gray-500">Toujours là pour vous aider</p>
+              <h1 className="text-xl font-semibold text-gray-900">Huntaze Assistant</h1>
+              <p className="text-sm text-gray-500">Always here to help</p>
             </div>
           </div>
           
           <button
             onClick={resetConversation}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors group"
-            title="Nouvelle conversation"
+            title="New conversation"
           >
             <RotateCcw className="text-gray-500 group-hover:text-gray-700" size={20} />
           </button>
@@ -247,7 +247,7 @@ const Chatbot: React.FC = () => {
                   <div className="bg-gray-100 rounded-2xl px-4 py-3">
                     <div className="flex items-center gap-2">
                       <Loader2 className="animate-spin text-purple-600" size={16} />
-                      <span className="text-gray-500 text-sm">L'assistant réfléchit...</span>
+                      <span className="text-gray-500 text-sm">Assistant is thinking...</span>
                     </div>
                   </div>
                 ) : (
@@ -283,7 +283,7 @@ const Chatbot: React.FC = () => {
           {messages.length === 1 && (
             <div className="mt-8">
               <p className="text-center text-gray-500 mb-4">
-                Suggestions pour commencer :
+                Suggestions to get started:
               </p>
               <div className="flex flex-wrap gap-3 justify-center">
                 {suggestions.map((suggestion, index) => (
@@ -314,7 +314,7 @@ const Chatbot: React.FC = () => {
                     sendMessage();
                   }
                 }}
-                placeholder="Posez votre question à l'assistant..."
+                placeholder="Ask your question to the assistant..."
                 rows={1}
                 disabled={isAiTyping}
                 className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:bg-gray-50 disabled:text-gray-400"
@@ -343,7 +343,7 @@ const Chatbot: React.FC = () => {
           
           <div className="flex items-center justify-center gap-2 mt-3 text-xs text-gray-500">
             <Sparkles size={12} />
-            <span>Propulsé par l'IA Huntaze</span>
+            <span>Powered by Huntaze AI</span>
           </div>
         </div>
       </div>

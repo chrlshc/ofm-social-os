@@ -128,7 +128,7 @@ const Dashboard: React.FC = () => {
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
             Bonjour {userName} 👋
           </h1>
-          <p className="text-gray-600">Voici votre tableau de bord pour aujourd'hui</p>
+          <p className="text-gray-600">Here's your dashboard for today</p>
         </div>
 
         {stats.pendingMessages > 0 && (
@@ -136,28 +136,28 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center gap-3">
               <Bell className="text-yellow-600" size={20} />
               <span className="text-yellow-800 font-medium">
-                {stats.pendingMessages} messages en attente de réponse
+                {stats.pendingMessages} messages awaiting response
               </span>
             </div>
             <a 
               href="/messaging" 
               className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium hover:shadow-lg transition-shadow"
             >
-              Voir messages
+              View messages
             </a>
           </div>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
-            title="Fans actuels"
+            title="Current fans"
             value={formatNumber(stats.fans)}
             icon={<Users size={24} />}
             link="/analytics"
           />
           
           <StatCard
-            title="Revenus ce mois"
+            title="Revenue this month"
             value={formatCurrency(stats.revenueMonth)}
             icon={<DollarSign size={24} />}
             trend={{
@@ -168,59 +168,59 @@ const Dashboard: React.FC = () => {
           />
           
           <StatCard
-            title="Taux d'engagement"
+            title="Engagement rate"
             value={`${stats.engagementRate}%`}
             icon={<TrendingUp size={24} />}
             link="/analytics"
           />
           
           <StatCard
-            title="Messages en attente"
+            title="Pending messages"
             value={stats.pendingMessages}
             icon={<MessageCircle size={24} />}
             link="/messaging"
-            linkText="Répondre"
+            linkText="Reply"
           />
         </div>
 
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Actions rapides</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick actions</h2>
             <div className="space-y-3">
               <a 
                 href="/ai-config" 
                 className="flex items-center justify-between p-3 rounded-lg hover:bg-purple-50 transition-colors"
               >
-                <span className="text-gray-700">Configurer l'IA</span>
+                <span className="text-gray-700">Configure AI</span>
                 <ArrowUpRight size={16} className="text-purple-600" />
               </a>
               <a 
                 href="/analytics" 
                 className="flex items-center justify-between p-3 rounded-lg hover:bg-purple-50 transition-colors"
               >
-                <span className="text-gray-700">Voir statistiques détaillées</span>
+                <span className="text-gray-700">View detailed statistics</span>
                 <ArrowUpRight size={16} className="text-purple-600" />
               </a>
               <a 
                 href="/profile" 
                 className="flex items-center justify-between p-3 rounded-lg hover:bg-purple-50 transition-colors"
               >
-                <span className="text-gray-700">Modifier mon profil</span>
+                <span className="text-gray-700">Edit my profile</span>
                 <ArrowUpRight size={16} className="text-purple-600" />
               </a>
             </div>
           </div>
 
           <div className="md:col-span-2 bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
-            <h2 className="text-lg font-semibold mb-4">Conseils du jour</h2>
+            <h2 className="text-lg font-semibold mb-4">Tip of the day</h2>
             <p className="text-white/90 mb-4">
-              Votre taux d'engagement est excellent ! Continuez à interagir régulièrement avec vos fans pour maintenir cette dynamique.
+              Your engagement rate is excellent! Keep interacting regularly with your fans to maintain this momentum.
             </p>
             <a 
               href="/chatbot" 
               className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg font-medium hover:bg-white/30 transition-colors"
             >
-              Demander conseil à l'IA
+              Ask AI for advice
               <ArrowUpRight size={16} />
             </a>
           </div>

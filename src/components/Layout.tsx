@@ -22,13 +22,13 @@ export default function Layout({ children }: LayoutProps) {
   const router = useRouter()
 
   const menuItems = [
-    { id: 'dashboard', label: 'Tableau de bord', icon: Home, href: '/dashboard' },
-    { id: 'profile', label: 'Mon Profil', icon: User, href: '/profile' },
+    { id: 'dashboard', label: 'Dashboard', icon: Home, href: '/dashboard' },
+    { id: 'profile', label: 'My Profile', icon: User, href: '/profile' },
     { id: 'messaging', label: 'Messages', icon: MessageCircle, href: '/messaging' },
     { id: 'analytics', label: 'Analytics', icon: BarChart3, href: '/analytics' },
-    { id: 'ai-config', label: 'Configuration IA', icon: Brain, href: '/ai-config' },
-    { id: 'settings', label: 'Réglages', icon: Settings, href: '/settings' },
-    { id: 'chatbot', label: 'Assistant IA', icon: Bot, href: '/chatbot' },
+    { id: 'ai-config', label: 'AI Configuration', icon: Brain, href: '/ai-config' },
+    { id: 'settings', label: 'Settings', icon: Settings, href: '/settings' },
+    { id: 'chatbot', label: 'AI Assistant', icon: Bot, href: '/chatbot' },
   ]
 
   return (
