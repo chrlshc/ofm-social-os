@@ -24,8 +24,7 @@ const platforms = [
     icon: '📷',
     description: 'Partagez des Reels et Stories',
     color: 'bg-gradient-to-r from-purple-500 to-pink-500',
-    available: false,
-    comingSoon: true
+    available: true
   },
   {
     id: 'tiktok',
@@ -33,8 +32,7 @@ const platforms = [
     icon: '🎵',
     description: 'Créez des vidéos virales',
     color: 'bg-black',
-    available: false,
-    comingSoon: true
+    available: true
   }
 ];
 

@@ -159,12 +159,9 @@ export default function SchedulePage() {
                         ? 'bg-blue-600 text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }
-                      ${platform !== 'reddit' ? 'opacity-50 cursor-not-allowed' : ''}
                     `}
-                    disabled={platform !== 'reddit'}
                   >
                     {platform}
-                    {platform !== 'reddit' && <span className="text-xs ml-1">(bientôt)</span>}
                   </button>
                 ))}
               </div>
@@ -231,21 +228,51 @@ export default function SchedulePage() {
               />
             </div>
             
-            {/* Media URL (optional for Reddit) */}
-            {(selectedPlatform === 'reddit' || selectedPlatform === 'instagram' || selectedPlatform === 'tiktok') && (
+            {/* Instagram specific fields */}
+            {selectedPlatform === 'instagram' && (
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  URL du média {selectedPlatform === 'reddit' ? '(optionnel)' : ''}
+                  Type de publication
+                </label>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  defaultValue="reel"
+                >
+                  <option value="reel">Reel</option>
+                  <option value="story">Story</option>
+                  <option value="post">Post</option>
+                </select>
+              </div>
+            )}
+            
+            {/* TikTok specific fields */}
+            {selectedPlatform === 'tiktok' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Musique (optionnel)
                 </label>
                 <input
-                  type="url"
-                  value={mediaUrl}
-                  onChange={(e) => setMediaUrl(e.target.value)}
-                  placeholder="https://example.com/image.jpg"
+                  type="text"
+                  placeholder="Nom de la musique ou ID"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
             )}
+            
+            {/* Media URL */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                URL du média {selectedPlatform === 'reddit' ? '(optionnel)' : selectedPlatform === 'instagram' || selectedPlatform === 'tiktok' ? '(requis)' : ''}
+              </label>
+              <input
+                type="url"
+                value={mediaUrl}
+                onChange={(e) => setMediaUrl(e.target.value)}
+                placeholder={selectedPlatform === 'tiktok' ? 'https://example.com/video.mp4' : 'https://example.com/image.jpg'}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required={selectedPlatform === 'instagram' || selectedPlatform === 'tiktok'}
+              />
+            </div>
             
             {/* Schedule */}
             <div className="mb-6">
@@ -278,7 +305,7 @@ export default function SchedulePage() {
             <div className="flex gap-3">
               <button
                 onClick={() => handlePublish(true)}
-                disabled={!hasAccount || isPublishing || !caption || (selectedPlatform === 'reddit' && !title)}
+                disabled={!hasAccount || isPublishing || !caption || (selectedPlatform === 'reddit' && !title) || ((selectedPlatform === 'instagram' || selectedPlatform === 'tiktok') && !mediaUrl)}
                 className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
                 {isPublishing ? 'Publication...' : 'Publier maintenant'}
@@ -286,7 +313,7 @@ export default function SchedulePage() {
               
               <button
                 onClick={() => handlePublish(false)}
-                disabled={!hasAccount || isPublishing || !caption || !scheduleDate || (selectedPlatform === 'reddit' && !title)}
+                disabled={!hasAccount || isPublishing || !caption || !scheduleDate || (selectedPlatform === 'reddit' && !title) || ((selectedPlatform === 'instagram' || selectedPlatform === 'tiktok') && !mediaUrl)}
                 className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
                 Planifier
