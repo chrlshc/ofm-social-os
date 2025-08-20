@@ -1,13 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { pool } from '@/server/db';
+import { env } from '@/lib/env';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-07-30.basil',
-});
+// Initialize Stripe only if we have a valid key
+const stripe = env.STRIPE_SECRET_KEY && env.STRIPE_SECRET_KEY !== '' 
+  ? new Stripe(env.STRIPE_SECRET_KEY, {
+      apiVersion: '2025-07-30.basil',
+    })
+  : null;
 
 // POST /api/stripe/connect - Create Express account
 export async function POST(request: NextRequest) {
+  if (!stripe) {
+    return NextResponse.json(
+      { error: 'Stripe is not configured' },
+      { status: 503 }
+    );
+  }
+  
   try {
     const body = await request.json();
     const { user_id, email, return_url } = body;
@@ -20,6 +31,13 @@ export async function POST(request: NextRequest) {
     }
     
     // Check if user already has a Stripe account
+    if (!pool) {
+      return NextResponse.json(
+        { error: 'Database connection not available' },
+        { status: 503 }
+      );
+    }
+    
     const existingResult = await pool.query(
       `SELECT stripe_account_id, stripe_onboarding_complete 
        FROM users 
@@ -90,6 +108,13 @@ export async function POST(request: NextRequest) {
 
 // GET /api/stripe/connect - Get account status
 export async function GET(request: NextRequest) {
+  if (!stripe) {
+    return NextResponse.json(
+      { error: 'Stripe is not configured' },
+      { status: 503 }
+    );
+  }
+  
   const searchParams = request.nextUrl.searchParams;
   const userId = searchParams.get('user_id');
   
@@ -163,6 +188,13 @@ export async function GET(request: NextRequest) {
 
 // DELETE /api/stripe/connect - Disconnect account
 export async function DELETE(request: NextRequest) {
+  if (!stripe) {
+    return NextResponse.json(
+      { error: 'Stripe is not configured' },
+      { status: 503 }
+    );
+  }
+  
   try {
     const body = await request.json();
     const { user_id } = body;
