@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '@/server/db';
-import { requireAuth } from '@/lib/auth';
+import { requireHuntazeAuth } from '@/lib/huntaze-auth';
 import { validateRequest, deleteAccountSchema } from '@/lib/validation';
 
 // GET /api/social/accounts - List connected accounts
 export async function GET(request: NextRequest) {
-  const authResult = await requireAuth();
+  const authResult = await requireHuntazeAuth();
   if (authResult instanceof NextResponse) return authResult;
   
   const userId = authResult.id;
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
 // DELETE /api/social/accounts - Disconnect an account
 export async function DELETE(request: NextRequest) {
   try {
-    const authResult = await requireAuth();
+    const authResult = await requireHuntazeAuth();
     if (authResult instanceof NextResponse) return authResult;
     
     const body = await request.json();

@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '@/server/db';
 import { publishToSocial } from '@/server/social/publish';
 import { log } from '@/lib/observability';
-import { requireStripeOnboarding } from '@/lib/auth';
+import { requireHuntazeStripeOnboarding, requireHuntazeAuth } from '@/lib/huntaze-auth';
 import { validateRequest, publishPostSchema, getPostsSchema } from '@/lib/validation';
 import PgBoss from 'pg-boss';
 import { env } from '@/lib/env';
 
 // POST /api/social/publish - Create immediate or scheduled post
 export async function POST(request: NextRequest) {
-  const authResult = await requireStripeOnboarding();
+  const authResult = await requireHuntazeStripeOnboarding();
   if (authResult instanceof NextResponse) return authResult;
   
   const userId = authResult.id;
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
 
 // GET /api/social/publish - Get posts history
 export async function GET(request: NextRequest) {
-  const authResult = await requireAuth();
+  const authResult = await requireHuntazeAuth();
   if (authResult instanceof NextResponse) return authResult;
   
   const userId = authResult.id;
