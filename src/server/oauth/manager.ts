@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { decrypt, encrypt } from '../../lib/crypto';
+import { decrypt, encrypt } from '../../lib/kms-crypto';
 import { PlatformAccount } from '../types';
 import fetch from 'node-fetch';
 

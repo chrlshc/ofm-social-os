@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import fetch from 'node-fetch';
 import { pool } from '@/server/db';
-import { encrypt } from '@/lib/crypto';
+import { encrypt } from '@/lib/kms-crypto';
 
 const REDDIT_CLIENT_ID = process.env.REDDIT_CLIENT_ID || '';
 const REDDIT_CLIENT_SECRET = process.env.REDDIT_CLIENT_SECRET || '';

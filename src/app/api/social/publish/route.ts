@@ -1,269 +1,239 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '@/server/db';
-import { publishPost } from '@/server/social/publish';
-import { logPostEvent } from '@/lib/observability';
+import { publishToSocial } from '@/server/social/publish';
+import { log } from '@/lib/observability';
+import { requireStripeOnboarding } from '@/lib/auth';
+import { validateRequest, publishPostSchema, getPostsSchema } from '@/lib/validation';
 import PgBoss from 'pg-boss';
+import { env } from '@/lib/env';
 
-// POST /api/social/publish - Publish immediately or schedule
+// POST /api/social/publish - Create immediate or scheduled post
 export async function POST(request: NextRequest) {
+  const authResult = await requireStripeOnboarding();
+  if (authResult instanceof NextResponse) return authResult;
+  
+  const userId = authResult.id;
+  
   try {
     const body = await request.json();
-    const {
-      user_id,
-      platform,
-      caption,
-      media_url,
-      scheduled_at,
-      platform_specific = {}
-    } = body;
+    const validation = await validateRequest(publishPostSchema, body);
+    if ('error' in validation) return validation.error;
     
-    // Validation
-    if (!user_id || !platform || !caption) {
+    const { platform, caption, media_url, scheduled_at, platform_specific } = validation.data;
+    
+    // Validate platform-specific requirements
+    if (platform === 'reddit' && !platform_specific?.title) {
       return NextResponse.json(
-        { error: 'user_id, platform, and caption are required' },
+        { error: 'Reddit posts require a title' },
         { status: 400 }
       );
     }
     
-    // Validate platform
-    if (!['reddit', 'instagram', 'tiktok'].includes(platform)) {
-      return NextResponse.json(
-        { error: 'Invalid platform. Must be reddit, instagram, or tiktok' },
-        { status: 400 }
-      );
-    }
-    
-    // Validate media requirements
     if ((platform === 'instagram' || platform === 'tiktok') && !media_url) {
       return NextResponse.json(
-        { error: `${platform} requires a media_url` },
+        { error: `${platform} posts require media_url` },
         { status: 400 }
       );
     }
     
-    const isScheduled = scheduled_at && new Date(scheduled_at) > new Date();
+    // Check if user has connected account for this platform
+    const accountResult = await pool.query(
+      `SELECT id FROM social_publisher.platform_accounts 
+       WHERE user_id = $1 AND platform = $2 
+       AND (expires_at IS NULL OR expires_at > NOW())
+       LIMIT 1`,
+      [userId, platform]
+    );
     
-    // Create scheduled post record
-    const insertResult = await pool.query(
+    if (accountResult.rows.length === 0) {
+      return NextResponse.json(
+        { error: `No active ${platform} account found. Please connect your account first.` },
+        { status: 400 }
+      );
+    }
+    
+    const isScheduled = !!scheduled_at;
+    const scheduledDate = scheduled_at ? new Date(scheduled_at) : new Date();
+    
+    // Insert post record
+    const postResult = await pool.query(
       `INSERT INTO social_publisher.scheduled_posts 
-       (owner_id, platform, caption, media_url, scheduled_at, meta_json, status)
+       (owner_id, platform, caption, media_url, scheduled_at, status, platform_specific)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING *`,
+       RETURNING id`,
       [
-        user_id,
+        userId,
         platform,
         caption,
-        media_url || null,
-        scheduled_at ? new Date(scheduled_at) : new Date(),
-        JSON.stringify({ platform_specific }),
-        isScheduled ? 'PENDING' : 'RUNNING'
+        media_url,
+        scheduledDate,
+        isScheduled ? 'PENDING' : 'RUNNING',
+        JSON.stringify(platform_specific)
       ]
     );
     
-    const post = insertResult.rows[0];
+    const postId = postResult.rows[0].id;
     
     if (isScheduled) {
-      // Schedule for later using pg-boss
-      const databaseUrl = process.env.DATABASE_URL_OFM_PRODUCTION || 
-                         process.env.DATABASE_URL_OFM_DEV || '';
-      
-      const boss = new PgBoss({
-        connectionString: databaseUrl,
-        schema: 'social_publisher'
-      });
-      
+      // Schedule with pg-boss
+      const boss = new PgBoss(env.DATABASE_URL_OFM_PRODUCTION);
       await boss.start();
       
-      try {
-        const jobId = await boss.send('post:execute', 
-          { scheduled_post_id: post.id }, 
-          {
-            startAfter: new Date(scheduled_at),
-            singletonKey: `post-${post.id}`,
-            retryLimit: 3,
-            retryDelay: 30,
-            retryBackoff: true
-          }
-        );
-        
-        await pool.query(
-          'UPDATE social_publisher.scheduled_posts SET dedupe_key = $1 WHERE id = $2',
-          [`job-${jobId}`, post.id]
-        );
-        
-        return NextResponse.json({
-          success: true,
-          message: 'Post scheduled successfully',
-          post_id: post.id,
-          scheduled_at: scheduled_at,
-          job_id: jobId
-        });
-        
-      } finally {
-        await boss.stop();
-      }
+      const jobId = await boss.send(
+        'post:execute',
+        { scheduled_post_id: postId },
+        {
+          startAfter: scheduledDate,
+          retryLimit: 3,
+          retryDelay: 30,
+          retryBackoff: true,
+          singletonKey: `post-${postId}`
+        }
+      );
       
-    } else {
-      // Publish immediately
-      const result = await publishPost({
-        scheduled_post_id: post.id,
-        owner_id: user_id,
-        platform: platform,
-        caption: caption,
-        media_url: media_url,
-        meta: platform_specific
+      await boss.stop();
+      
+      log('info', 'Post scheduled', {
+        post_id: postId,
+        job_id: jobId,
+        scheduled_at: scheduledDate,
+        platform
       });
       
-      if (result.ok) {
+      return NextResponse.json({
+        success: true,
+        message: 'Post scheduled successfully',
+        post_id: postId,
+        scheduled_at: scheduledDate,
+        job_id: jobId
+      });
+    } else {
+      // Publish immediately
+      try {
+        const result = await publishToSocial({
+          user_id: userId,
+          platform,
+          caption,
+          media_url,
+          platform_specific
+        });
+        
+        // Update post status
         await pool.query(
           `UPDATE social_publisher.scheduled_posts 
            SET status = 'SUCCEEDED', 
+               completed_at = NOW(),
                external_post_id = $2,
-               external_post_url = $3,
-               updated_at = NOW()
+               external_post_url = $3
            WHERE id = $1`,
-          [post.id, result.externalId, result.externalUrl]
+          [postId, result.external_id, result.external_url]
         );
         
         return NextResponse.json({
           success: true,
           message: 'Post published successfully',
-          post_id: post.id,
-          external_id: result.externalId,
-          external_url: result.externalUrl
+          post_id: postId,
+          external_url: result.external_url,
+          external_id: result.external_id
         });
-        
-      } else {
+      } catch (error: any) {
+        // Update post status to failed
         await pool.query(
           `UPDATE social_publisher.scheduled_posts 
            SET status = 'FAILED', 
-               error_message = $2,
-               updated_at = NOW()
+               completed_at = NOW(),
+               error_message = $2
            WHERE id = $1`,
-          [post.id, result.error]
+          [postId, error.message]
         );
         
-        return NextResponse.json(
-          { 
-            error: 'Failed to publish post',
-            message: result.error,
-            post_id: post.id
-          },
-          { status: 500 }
-        );
+        throw error;
       }
     }
-    
   } catch (error: any) {
-    console.error('Publish error:', error);
-    
-    // Log error
-    await logPostEvent(pool, {
-      level: 'error',
-      message: 'publish_api_error',
-      details: {
-        error: error.message,
-        stack: error.stack
-      }
-    });
-    
+    log('error', 'Publish error', { error: error.message, user_id: userId });
     return NextResponse.json(
-      { error: 'Failed to process request', message: error.message },
+      { 
+        error: 'Failed to publish post', 
+        message: error.message,
+        code: error.code || 'UNKNOWN_ERROR'
+      },
       { status: 500 }
     );
   }
 }
 
-// GET /api/social/publish - Get post history
+// GET /api/social/publish - Get posts history
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const userId = searchParams.get('user_id');
-  const platform = searchParams.get('platform');
-  const status = searchParams.get('status');
-  const limit = parseInt(searchParams.get('limit') || '50');
-  const offset = parseInt(searchParams.get('offset') || '0');
+  const authResult = await requireAuth();
+  if (authResult instanceof NextResponse) return authResult;
   
-  if (!userId) {
-    return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
-  }
+  const userId = authResult.id;
+  const searchParams = request.nextUrl.searchParams;
+  
+  const validation = await validateRequest(getPostsSchema, {
+    limit: searchParams.get('limit'),
+    offset: searchParams.get('offset'),
+    status: searchParams.get('status'),
+    platform: searchParams.get('platform'),
+  });
+  
+  if ('error' in validation) return validation.error;
+  
+  const { limit, offset, status, platform } = validation.data;
   
   try {
     let query = `
       SELECT 
-        sp.*,
-        pa.username as account_username,
-        pa.platform as account_platform
-      FROM social_publisher.scheduled_posts sp
-      LEFT JOIN social_publisher.platform_accounts pa ON sp.platform_account_id = pa.id
-      WHERE sp.owner_id = $1
-    `;
-    
-    const params: any[] = [parseInt(userId)];
-    let paramIdx = 1;
-    
-    if (platform) {
-      paramIdx++;
-      query += ` AND sp.platform = $${paramIdx}`;
-      params.push(platform);
-    }
-    
-    if (status) {
-      paramIdx++;
-      query += ` AND sp.status = $${paramIdx}`;
-      params.push(status);
-    }
-    
-    query += ` ORDER BY sp.scheduled_at DESC`;
-    
-    paramIdx++;
-    query += ` LIMIT $${paramIdx}`;
-    params.push(limit);
-    
-    paramIdx++;
-    query += ` OFFSET $${paramIdx}`;
-    params.push(offset);
-    
-    const result = await pool.query(query, params);
-    
-    // Get total count
-    let countQuery = `
-      SELECT COUNT(*) 
-      FROM social_publisher.scheduled_posts 
+        id,
+        platform,
+        caption,
+        media_url,
+        scheduled_at,
+        status,
+        completed_at,
+        external_post_id,
+        external_post_url,
+        error_message,
+        created_at
+      FROM social_publisher.scheduled_posts
       WHERE owner_id = $1
     `;
-    const countParams: any[] = [parseInt(userId)];
-    let countIdx = 1;
     
-    if (platform) {
-      countIdx++;
-      countQuery += ` AND platform = $${countIdx}`;
-      countParams.push(platform);
-    }
+    const params: any[] = [userId];
+    let paramIndex = 2;
     
     if (status) {
-      countIdx++;
-      countQuery += ` AND status = $${countIdx}`;
-      countParams.push(status);
+      query += ` AND status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
     }
     
-    const countResult = await pool.query(countQuery, countParams);
-    const total = parseInt(countResult.rows[0].count);
+    if (platform) {
+      query += ` AND platform = $${paramIndex}`;
+      params.push(platform);
+      paramIndex++;
+    }
+    
+    query += ` ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(limit, offset);
+    
+    const result = await pool.query(query, params);
     
     return NextResponse.json({
       success: true,
       posts: result.rows,
       pagination: {
-        total,
         limit,
         offset,
-        has_more: offset + limit < total
+        total: result.rowCount
       }
     });
     
   } catch (error: any) {
-    console.error('Failed to get posts:', error);
+    log('error', 'Failed to fetch posts', { error: error.message, user_id: userId });
     return NextResponse.json(
-      { error: 'Failed to get posts', message: error.message },
+      { error: 'Failed to fetch posts', message: error.message },
       { status: 500 }
     );
   }

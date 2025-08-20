@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '@/server/db';
-import { encrypt } from '@/lib/crypto';
+import { encrypt } from '@/lib/kms-crypto';
 import { log } from '@/lib/observability';
 
 // GET /api/social/auth/tiktok/callback

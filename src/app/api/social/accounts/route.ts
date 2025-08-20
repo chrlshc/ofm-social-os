@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '@/server/db';
+import { requireAuth } from '@/lib/auth';
+import { validateRequest, deleteAccountSchema } from '@/lib/validation';
 
 // GET /api/social/accounts - List connected accounts
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const userId = searchParams.get('user_id');
+  const authResult = await requireAuth();
+  if (authResult instanceof NextResponse) return authResult;
   
-  if (!userId) {
-    return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
-  }
+  const userId = authResult.id;
   
   try {
     const result = await pool.query(
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       FROM social_publisher.platform_accounts
       WHERE user_id = $1
       ORDER BY platform, created_at DESC`,
-      [parseInt(userId)]
+      [userId]
     );
     
     // Group by platform and add status
@@ -56,15 +56,15 @@ export async function GET(request: NextRequest) {
 // DELETE /api/social/accounts - Disconnect an account
 export async function DELETE(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { account_id, user_id } = body;
+    const authResult = await requireAuth();
+    if (authResult instanceof NextResponse) return authResult;
     
-    if (!account_id || !user_id) {
-      return NextResponse.json(
-        { error: 'account_id and user_id are required' },
-        { status: 400 }
-      );
-    }
+    const body = await request.json();
+    const validation = await validateRequest(deleteAccountSchema, body);
+    if ('error' in validation) return validation.error;
+    
+    const { account_id } = validation.data;
+    const user_id = authResult.id;
     
     // Delete the account (with ownership check)
     const result = await pool.query(
