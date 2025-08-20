@@ -1,0 +1,66 @@
+# Ignore site-web directory (separate project)
+site-web/
+
+# Ignore Python virtual environments
+venv/
+env/
+.env/
+
+# Ignore Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignore onboarding service (Python)
+onboarding/
+
+# Ignore payment service (Python)
+payment/
+
+# Ignore outreach service
+outreach/
+
+# Ignore marketing service
+marketing/
+
+# Ignore kpi service
+kpi/
+
+# Ignore database files
+database/
+init-scripts/
+
+# Ignore documentation
+*.md
+docs/
+analysis-report/
+
+# Ignore Github guide
+Github:Guide/
+
+# Ignore monitoring configs
+monitoring/
+
+# Ignore nginx config
+nginx.conf
+
+# Ignore docker files
+docker-compose*.yml
+Dockerfile
+
+# Ignore test files
+tests/
+*.test.ts
+*.test.js
+
+# Ignore git files
+.git/
+.gitignore
+
+# Ignore IDE files
+.vscode/
+.idea/
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
